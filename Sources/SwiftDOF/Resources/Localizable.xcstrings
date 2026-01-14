@@ -1,0 +1,119 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "A stream error occurred." : {
+
+    },
+    "An error occurred while reading: %@" : {
+
+    },
+    "DOF data could not be parsed." : {
+
+    },
+    "DOF data format was invalid." : {
+
+    },
+    "DOF file was not found." : {
+
+    },
+    "Failed to parse %@ “%@” at line %lld." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Failed to parse %1$@ “%2$@” at line %3$lld."
+          }
+        }
+      }
+    },
+    "File encoding was invalid." : {
+
+    },
+    "Latitude direction “%@” is invalid. Expected “N” or “S”." : {
+
+    },
+    "Line %lld has %lld characters but %lld are required." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Line %1$lld has %#@arg2@ but %#@arg3@ are required."
+          },
+          "substitutions" : {
+            "arg2" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg character"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg characters"
+                    }
+                  }
+                }
+              }
+            },
+            "arg3" : {
+              "argNum" : 3,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg character"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg characters"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Line was too short." : {
+
+    },
+    "Longitude direction “%@” is invalid. Expected “E” or “W”." : {
+
+    },
+    "The “CURRENCY DATE = ” pattern was not found in the header." : {
+
+    },
+    "The currency date contains non-numeric components." : {
+
+    },
+    "The currency date is not in MM/DD/YY format." : {
+
+    },
+    "The DOF header does not contain a currency date." : {
+
+    },
+    "The file at “%@” could not be found." : {
+
+    },
+    "The file is not valid ASCII encoding." : {
+
+    },
+    "Verify that the file exists and has not been moved or deleted." : {
+
+    },
+    "Verify the file is a valid FAA Digital Obstacle File." : {
+
+    }
+  },
+  "version" : "1.1"
+}
