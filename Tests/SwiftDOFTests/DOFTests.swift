@@ -165,19 +165,19 @@ struct DOFTests {
 
   @Test("From data factory method")
   func testFromData() throws {
-    let dof = try #require(DOF.from(data: sampleDOFData))
+    let dof = try DOF.from(data: sampleDOFData)
     #expect(dof.count == 3)
   }
 
   @Test("From data with error callback")
-  func testFromDataWithErrorCallback() {
+  func testFromDataWithErrorCallback() throws {
     var errorCalled = false
 
-    let dof = DOF.from(data: sampleDOFData) { _, _ in
+    let dof = try DOF.from(data: sampleDOFData) { _, _ in
       errorCalled = true
     }
 
-    #expect(dof != nil)
+    #expect(dof.count == 3)
     #expect(!errorCalled)  // No errors in valid content
   }
 }

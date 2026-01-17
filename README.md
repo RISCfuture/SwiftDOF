@@ -14,10 +14,22 @@ from <https://www.faa.gov/air_traffic/flight_info/aeronav/digital_products/dof/>
 
 The data is parsed into Codable structs that can be used in your Swift project.
 
-The design philosophy of SwiftDOF is _domain restricted data_ wherever
-possible. This means favoring restrictive enums over open types like Strings.
-It also takes advantage of `Foundation` types wherever possible, such as
-`Measurement`s instead of raw numeric types for physical values.
+### Design Philosophy
+
+SwiftDOF follows these design principles:
+
+- **Domain-restricted data**: Restrictive enums are favored over open types like
+  Strings wherever possible, ensuring type safety and catching errors at compile
+  time.
+
+- **Foundation integration**: The library uses `Foundation` types wherever
+  possible, such as `Measurement`s instead of raw numeric types for physical
+  values.
+
+- **Strict parsing**: The parser throws errors for any malformed or invalid
+  data rather than silently accepting it. This ensures data integrity and makes
+  debugging easier. All parsing errors are reported via either thrown exceptions
+  or the `errorCallback` parameter.
 
 The DOF format is documented at <https://www.faa.gov/air_traffic/flight_info/aeronav/digital_products/dof/media/DOF_README_09-03-2019.pdf>.
 
@@ -94,6 +106,50 @@ let lon = obstacle.longitude
 // Or as CoreLocation coordinate
 let coordinate = obstacle.coreLocation
 ```
+
+### Error Handling
+
+SwiftDOF uses strict parsing and reports all errors. There are two ways to
+handle parsing errors:
+
+**1. Catch thrown errors** for fatal issues (invalid format, missing headers):
+
+```swift
+do {
+    let dof = try DOF(data: fileData)
+} catch let error as DOFError {
+    switch error {
+    case .invalidFormat(let formatError):
+        print("Invalid format: \(formatError)")
+    case .parseError(let field, let value, let line):
+        print("Failed to parse \(field) '\(value)' at line \(line)")
+    case .lineTooShort(let expected, let actual, let line):
+        print("Line \(line) has \(actual) chars, expected \(expected)")
+    case .invalidEncoding:
+        print("File contains invalid encoding")
+    default:
+        print("Error: \(error)")
+    }
+}
+```
+
+**2. Use the error callback** to handle per-line errors while continuing to
+parse valid data:
+
+```swift
+var parseErrors: [(Error, Int)] = []
+
+let dof = try DOF(data: fileData) { error, lineNumber in
+    parseErrors.append((error, lineNumber))
+    print("Warning: \(error) at line \(lineNumber)")
+}
+
+print("Parsed \(dof.count) obstacles with \(parseErrors.count) errors")
+```
+
+The error callback is invoked for each line that fails to parse, allowing you
+to collect warnings while still loading the rest of the file. This is useful
+for handling DOF files that may contain occasional malformed records.
 
 ## Documentation
 

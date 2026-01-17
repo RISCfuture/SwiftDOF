@@ -77,12 +77,15 @@ public struct Cycle: Sendable, Codable, Equatable, Hashable {
   public var isValid: Bool {
     guard let firstDate else { return false }
 
-    let daysFromDatum =
-      Self.calendar.dateComponents(
+    guard
+      let daysFromDatum = Self.calendar.dateComponents(
         [.day],
         from: Self.datumDate,
         to: firstDate
-      ).day ?? 1
+      ).day
+    else {
+      return false
+    }
 
     return daysFromDatum.isMultiple(of: Self.period)
   }

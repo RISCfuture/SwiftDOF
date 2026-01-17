@@ -58,3 +58,32 @@ let lon = obstacle.longitude
 // CoreLocation integration
 let coordinate = obstacle.coreLocation  // CLLocationCoordinate2D
 ```
+
+### Error Handling
+
+SwiftDOF uses strict parsing and throws errors for invalid data. Handle errors
+using standard Swift error handling:
+
+```swift
+do {
+    let dof = try DOF(data: fileData)
+} catch let error as DOFError {
+    print("Parse error: \(error.localizedDescription)")
+}
+```
+
+For per-line error handling while continuing to parse valid data, use the error
+callback:
+
+```swift
+var warnings: [String] = []
+
+let dof = try DOF(data: fileData) { error, lineNumber in
+    warnings.append("Line \(lineNumber): \(error)")
+}
+
+print("Loaded \(dof.count) obstacles with \(warnings.count) warnings")
+```
+
+This allows you to collect parse errors for individual records while still
+loading the rest of the file successfully.

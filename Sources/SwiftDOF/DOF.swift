@@ -166,15 +166,13 @@ public struct DOF: Sendable, Codable {
   /// - Parameters:
   ///   - filePath: The URL of the DOF file.
   ///   - errorCallback: Optional callback for parse errors.
-  /// - Returns: The parsed DOF, or nil if loading failed.
-  public static func from(filePath: URL, errorCallback: ((Error, Int) -> Void)? = nil) -> Self? {
-    do {
-      let data = try Data(contentsOf: filePath)
-      return try Self(data: data, errorCallback: errorCallback)
-    } catch {
-      errorCallback?(error, 0)
-      return nil
-    }
+  /// - Returns: The parsed DOF.
+  /// - Throws: Error if loading or parsing fails.
+  public static func from(filePath: URL, errorCallback: ((Error, Int) -> Void)? = nil) throws
+    -> Self
+  {
+    let data = try Data(contentsOf: filePath)
+    return try Self(data: data, errorCallback: errorCallback)
   }
 
   /// Load DOF data from raw data.
@@ -182,14 +180,10 @@ public struct DOF: Sendable, Codable {
   /// - Parameters:
   ///   - data: The DOF file content as Data.
   ///   - errorCallback: Optional callback for parse errors.
-  /// - Returns: The parsed DOF, or nil if loading failed.
-  public static func from(data: Data, errorCallback: ((Error, Int) -> Void)? = nil) -> Self? {
-    do {
-      return try Self(data: data, errorCallback: errorCallback)
-    } catch {
-      errorCallback?(error, 0)
-      return nil
-    }
+  /// - Returns: The parsed DOF.
+  /// - Throws: DOFError if parsing fails.
+  public static func from(data: Data, errorCallback: ((Error, Int) -> Void)? = nil) throws -> Self {
+    try Self(data: data, errorCallback: errorCallback)
   }
 
   /// Load DOF data from a file URL (async streaming).

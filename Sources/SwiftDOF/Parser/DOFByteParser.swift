@@ -55,15 +55,15 @@ struct DOFByteParser: Sendable {
     let base = bytes.startIndex
 
     // String fields
-    let oasNumber = slice(bytes, base, fields.oasNumber).toString()
-    let country = slice(bytes, base, fields.country).toString()
+    let oasNumber = try slice(bytes, base, fields.oasNumber).toString()
+    let country = try slice(bytes, base, fields.country).toString()
     let stateSlice = slice(bytes, base, fields.state)
-    let city = slice(bytes, base, fields.city).toString()
-    let studyNumber = slice(bytes, base, fields.studyNumber).toString()
+    let city = try slice(bytes, base, fields.city).toString()
+    let studyNumber = try slice(bytes, base, fields.studyNumber).toString()
 
     // Parse last updated date (YYYYDDD format)
     let lastUpdatedSlice = slice(bytes, base, fields.lastUpdated)
-    let lastUpdatedComponents = parseJulianDate(lastUpdatedSlice)
+    let lastUpdatedComponents = try parseJulianDate(lastUpdatedSlice, lineNumber: lineNumber)
 
     // Verification status
     let verificationByte = bytes[base + fields.verification.lowerBound]
@@ -123,10 +123,13 @@ struct DOFByteParser: Sendable {
     }
 
     // Obstacle type (trimmed string)
-    let obstacleType = slice(bytes, base, fields.obstacleType).toString()
+    let obstacleType = try slice(bytes, base, fields.obstacleType).toString()
 
     // Numeric fields
-    let quantity = UInt8(slice(bytes, base, fields.quantity).parseUInt() ?? 1)
+    guard let quantityValue = slice(bytes, base, fields.quantity).parseUInt() else {
+      throw DOFError.parseError(field: "quantity", value: "invalid", line: lineNumber)
+    }
+    let quantity = UInt8(quantityValue)
 
     guard let agl = slice(bytes, base, fields.aglHeight).parseInt() else {
       throw DOFError.parseError(field: "heightAGL", value: "invalid", line: lineNumber)
@@ -140,7 +143,7 @@ struct DOFByteParser: Sendable {
     let longitude = try parseLongitude(bytes, base: base, lineNumber: lineNumber)
 
     // State (nil if empty)
-    let state: String? = stateSlice.first == ASCII.space ? nil : stateSlice.toString()
+    let state: String? = stateSlice.first == ASCII.space ? nil : try stateSlice.toString()
 
     return Obstacle(
       oasNumber: oasNumber,
@@ -227,13 +230,25 @@ struct DOFByteParser: Sendable {
     let secSlice = slice(bytes, base, fields.latSeconds)
 
     guard let deg = degSlice.parseDouble() else {
-      throw DOFError.parseError(field: "latDegrees", value: degSlice.toString(), line: lineNumber)
+      throw DOFError.parseError(
+        field: "latDegrees",
+        value: try degSlice.toString(),
+        line: lineNumber
+      )
     }
     guard let min = minSlice.parseDouble() else {
-      throw DOFError.parseError(field: "latMinutes", value: minSlice.toString(), line: lineNumber)
+      throw DOFError.parseError(
+        field: "latMinutes",
+        value: try minSlice.toString(),
+        line: lineNumber
+      )
     }
     guard let sec = secSlice.dropLast().parseDouble() else {
-      throw DOFError.parseError(field: "latSeconds", value: secSlice.toString(), line: lineNumber)
+      throw DOFError.parseError(
+        field: "latSeconds",
+        value: try secSlice.toString(),
+        line: lineNumber
+      )
     }
 
     let decimal = deg + min / 60.0 + sec / 3600.0
@@ -259,13 +274,25 @@ struct DOFByteParser: Sendable {
     let secSlice = slice(bytes, base, fields.lonSeconds)
 
     guard let deg = degSlice.parseDouble() else {
-      throw DOFError.parseError(field: "lonDegrees", value: degSlice.toString(), line: lineNumber)
+      throw DOFError.parseError(
+        field: "lonDegrees",
+        value: try degSlice.toString(),
+        line: lineNumber
+      )
     }
     guard let min = minSlice.parseDouble() else {
-      throw DOFError.parseError(field: "lonMinutes", value: minSlice.toString(), line: lineNumber)
+      throw DOFError.parseError(
+        field: "lonMinutes",
+        value: try minSlice.toString(),
+        line: lineNumber
+      )
     }
     guard let sec = secSlice.dropLast().parseDouble() else {
-      throw DOFError.parseError(field: "lonSeconds", value: secSlice.toString(), line: lineNumber)
+      throw DOFError.parseError(
+        field: "lonSeconds",
+        value: try secSlice.toString(),
+        line: lineNumber
+      )
     }
 
     let decimal = deg + min / 60.0 + sec / 3600.0
@@ -285,14 +312,27 @@ struct DOFByteParser: Sendable {
 
   /// Parse julian date (YYYYDDD format) into DateComponents.
   private static func parseJulianDate<T: RandomAccessCollection>(
-    _ bytes: T
-  ) -> DateComponents where T.Element == UInt8, T.Index == Int {
+    _ bytes: T,
+    lineNumber: Int
+  ) throws -> DateComponents where T.Element == UInt8, T.Index == Int {
     // Format: YYYYDDD (e.g., 2014138 = year 2014, day 138)
     let yearSlice = bytes.prefix(4)
     let daySlice = bytes.dropFirst(4)
 
-    let year = yearSlice.parseInt() ?? 0
-    let dayOfYear = daySlice.parseInt() ?? 0
+    guard let year = yearSlice.parseInt() else {
+      throw DOFError.parseError(
+        field: "lastUpdatedYear",
+        value: try yearSlice.toString(),
+        line: lineNumber
+      )
+    }
+    guard let dayOfYear = daySlice.parseInt() else {
+      throw DOFError.parseError(
+        field: "lastUpdatedDay",
+        value: try daySlice.toString(),
+        line: lineNumber
+      )
+    }
 
     var components = DateComponents()
     components.timeZone = .gmt

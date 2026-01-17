@@ -23,10 +23,7 @@ struct FileDataLoader: DOFDataLoader {
       data = try Data(contentsOf: url)
     }
 
-    guard let dof = DOF.from(data: data, errorCallback: errorCallback) else {
-      throw DOFDataLoaderError.parseFailed
-    }
-    return dof
+    return try DOF.from(data: data, errorCallback: errorCallback)
   }
 }
 
@@ -45,10 +42,7 @@ struct URLZipLoader: DOFDataLoader {
 
     let data = try ZipExtractor.extractDOFData(from: downloadedData)
 
-    guard let dof = DOF.from(data: data, errorCallback: errorCallback) else {
-      throw DOFDataLoaderError.parseFailed
-    }
-    return dof
+    return try DOF.from(data: data, errorCallback: errorCallback)
   }
 }
 
