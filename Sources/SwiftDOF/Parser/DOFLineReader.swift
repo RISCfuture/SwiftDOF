@@ -12,6 +12,9 @@ struct DOFLineReader: Sequence, IteratorProtocol, Sendable {
   private var position: Int = 0
   private var lineBuffer: [UInt8] = []
 
+  /// Current read position in bytes, useful for progress tracking.
+  var bytesRead: Int { position }
+
   init(data: Data) {
     self.data = data
     lineBuffer.reserveCapacity(Self.lineBufferCapacity)
@@ -58,9 +61,20 @@ struct AsyncDOFLineReader: AsyncSequence, Sendable {
   private let url: URL
   private let bufferSize: Int
 
+  /// The total size of the file in bytes, if known.
+  let fileSize: Int64?
+
   init(url: URL, bufferSize: Int = defaultBufferSize) {
     self.url = url
     self.bufferSize = bufferSize
+    // Try to get file size for progress tracking
+    if let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+      let size = attrs[.size] as? Int64
+    {
+      self.fileSize = size
+    } else {
+      self.fileSize = nil
+    }
   }
 
   func makeAsyncIterator() -> AsyncIterator {
@@ -75,6 +89,9 @@ struct AsyncDOFLineReader: AsyncSequence, Sendable {
     private var bufferPos: Int = 0
     private var lineBuffer: [UInt8] = []
     private var isEOF = false
+
+    /// Total bytes read from the file so far.
+    private(set) var bytesRead: Int64 = 0
 
     init(url: URL, bufferSize: Int) {
       self.url = url
@@ -103,6 +120,7 @@ struct AsyncDOFLineReader: AsyncSequence, Sendable {
             // Return any remaining content as final line
             return lineBuffer.isEmpty ? nil : lineBuffer
           }
+          bytesRead += Int64(chunk.count)
           buffer = Array(chunk)
           bufferPos = 0
         }

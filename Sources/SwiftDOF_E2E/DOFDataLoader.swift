@@ -4,9 +4,14 @@ import SwiftDOF
 /// Protocol for loading DOF data from various sources.
 protocol DOFDataLoader {
   /// Load DOF data from the source.
-  /// - Parameter errorCallback: Called for each parse error with (error, lineNumber).
+  /// - Parameters:
+  ///   - progressHandler: Optional callback for progress tracking.
+  ///   - errorCallback: Called for each parse error with (error, lineNumber).
   /// - Returns: The parsed DOF data.
-  func load(errorCallback: @escaping (Error, Int) -> Void) async throws -> DOF
+  func load(
+    progressHandler: @Sendable (Progress) -> Void,
+    errorCallback: @escaping (Error, Int) -> Void
+  ) async throws -> DOF
 }
 
 // MARK: - FileDataLoader
@@ -15,7 +20,10 @@ protocol DOFDataLoader {
 struct FileDataLoader: DOFDataLoader {
   let url: URL
 
-  func load(errorCallback: @escaping (Error, Int) -> Void) throws -> DOF {
+  func load(
+    progressHandler: @Sendable (Progress) -> Void,
+    errorCallback: @escaping (Error, Int) -> Void
+  ) throws -> DOF {
     let data: Data
     if url.pathExtension.lowercased() == "zip" {
       data = try ZipExtractor.extractDOFData(from: url)
@@ -23,7 +31,7 @@ struct FileDataLoader: DOFDataLoader {
       data = try Data(contentsOf: url)
     }
 
-    return try DOF.from(data: data, errorCallback: errorCallback)
+    return try DOF.from(data: data, progressHandler: progressHandler, errorCallback: errorCallback)
   }
 }
 
@@ -33,7 +41,10 @@ struct FileDataLoader: DOFDataLoader {
 struct URLZipLoader: DOFDataLoader {
   let url: URL
 
-  func load(errorCallback: @escaping (Error, Int) -> Void) async throws -> DOF {
+  func load(
+    progressHandler: @Sendable (Progress) -> Void,
+    errorCallback: @escaping (Error, Int) -> Void
+  ) async throws -> DOF {
     let (downloadedData, response) = try await URLSession.shared.data(from: url)
 
     if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
@@ -42,7 +53,7 @@ struct URLZipLoader: DOFDataLoader {
 
     let data = try ZipExtractor.extractDOFData(from: downloadedData)
 
-    return try DOF.from(data: data, errorCallback: errorCallback)
+    return try DOF.from(data: data, progressHandler: progressHandler, errorCallback: errorCallback)
   }
 }
 
@@ -52,14 +63,25 @@ struct URLZipLoader: DOFDataLoader {
 struct URLStreamLoader: DOFDataLoader {
   let url: URL
 
-  func load(errorCallback: @escaping (Error, Int) -> Void) async throws -> DOF {
+  func load(
+    progressHandler: @Sendable (Progress) -> Void,
+    errorCallback: @escaping (Error, Int) -> Void
+  ) async throws -> DOF {
     let (bytes, response) = try await URLSession.shared.bytes(from: url)
 
     if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
       throw DOFDataLoaderError.downloadFailed(statusCode: httpResponse.statusCode)
     }
 
-    return try await DOF(bytes: bytes, errorCallback: errorCallback)
+    // Get content length for progress tracking
+    let contentLength = (response as? HTTPURLResponse)?.expectedContentLength ?? -1
+
+    return try await DOF(
+      bytes: bytes,
+      totalBytes: contentLength > 0 ? contentLength : nil,
+      progressHandler: progressHandler,
+      errorCallback: errorCallback
+    )
   }
 }
 

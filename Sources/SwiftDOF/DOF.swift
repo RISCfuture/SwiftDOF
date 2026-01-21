@@ -29,16 +29,27 @@ public struct DOF: Sendable, Codable {
   ///
   /// - Parameters:
   ///   - data: The DOF file content as raw bytes.
+  ///   - progressHandler: Optional callback called before processing begins with a Progress
+  ///     object that you can use to track parsing progress.
   ///   - errorCallback: Optional callback for parse errors. Called with (error, lineNumber).
   /// - Throws: DOFError if the file format is invalid.
-  public init(data: Data, errorCallback: ((Error, Int) -> Void)? = nil) throws {
+  public init(
+    data: Data,
+    progressHandler: @Sendable (Progress) -> Void = { _ in },
+    errorCallback: ((Error, Int) -> Void)? = nil
+  ) throws {
     var obstacles: [String: Obstacle] = [:]
     obstacles.reserveCapacity(Self.estimatedObstacleCount)
 
     var lineNumber = 0
     var cycle: Cycle?
 
-    for line in DOFLineReader(data: data) {
+    // Setup progress tracking based on data size
+    let progress = Progress(totalUnitCount: Int64(data.count))
+    progressHandler(progress)
+
+    var reader = DOFLineReader(data: data)
+    while let line = reader.next() {
       lineNumber += 1
       try Self.processLine(
         line,
@@ -47,7 +58,9 @@ public struct DOF: Sendable, Codable {
         obstacles: &obstacles,
         errorCallback: errorCallback
       )
+      progress.completedUnitCount = Int64(reader.bytesRead)
     }
+    progress.completedUnitCount = progress.totalUnitCount
 
     guard let cycle else {
       throw DOFError.invalidFormat(.missingCurrencyDate)
@@ -63,17 +76,36 @@ public struct DOF: Sendable, Codable {
   ///
   /// - Parameters:
   ///   - url: The URL of the DOF file to parse.
+  ///   - progressHandler: Optional callback called before processing begins with a Progress
+  ///     object that you can use to track parsing progress.
   ///   - errorCallback: Optional callback for parse errors. Called with (error, lineNumber).
   /// - Throws: DOFError if the file format is invalid.
-  public init(url: URL, errorCallback: ((Error, Int) -> Void)? = nil) async throws {
+  public init(
+    url: URL,
+    progressHandler: @Sendable (Progress) -> Void = { _ in },
+    errorCallback: ((Error, Int) -> Void)? = nil
+  ) async throws {
     var obstacles: [String: Obstacle] = [:]
     obstacles.reserveCapacity(Self.estimatedObstacleCount)
 
     var lineNumber = 0
     var cycle: Cycle?
+    var bytesRead: Int64 = 0
 
-    for try await line in AsyncDOFLineReader(url: url) {
+    let reader = AsyncDOFLineReader(url: url)
+
+    // Setup progress tracking based on file size
+    let progress: Progress
+    if let fileSize = reader.fileSize {
+      progress = Progress(totalUnitCount: fileSize)
+    } else {
+      progress = Progress(totalUnitCount: -1)  // Indeterminate
+    }
+    progressHandler(progress)
+
+    for try await line in reader {
       lineNumber += 1
+      bytesRead += Int64(line.count + 1)  // +1 for newline
       try Self.processLine(
         line[...],
         lineNumber: lineNumber,
@@ -81,6 +113,10 @@ public struct DOF: Sendable, Codable {
         obstacles: &obstacles,
         errorCallback: errorCallback
       )
+      progress.completedUnitCount = bytesRead
+    }
+    if progress.totalUnitCount > 0 {
+      progress.completedUnitCount = progress.totalUnitCount
     }
 
     guard let cycle else {
@@ -97,10 +133,16 @@ public struct DOF: Sendable, Codable {
   ///
   /// - Parameters:
   ///   - bytes: An async sequence of bytes to parse.
+  ///   - totalBytes: Optional total byte count for progress tracking. If not provided,
+  ///     progress will be indeterminate.
+  ///   - progressHandler: Optional callback called before processing begins with a Progress
+  ///     object that you can use to track parsing progress.
   ///   - errorCallback: Optional callback for parse errors. Called with (error, lineNumber).
   /// - Throws: DOFError if the file format is invalid.
   public init<S: AsyncSequence>(
     bytes: S,
+    totalBytes: Int64? = nil,
+    progressHandler: @Sendable (Progress) -> Void = { _ in },
     errorCallback: ((Error, Int) -> Void)? = nil
   ) async throws where S.Element == UInt8, S: Sendable {
     var obstacles: [String: Obstacle] = [:]
@@ -108,9 +150,15 @@ public struct DOF: Sendable, Codable {
 
     var lineNumber = 0
     var cycle: Cycle?
+    var bytesRead: Int64 = 0
+
+    // Setup progress tracking
+    let progress = Progress(totalUnitCount: totalBytes ?? -1)
+    progressHandler(progress)
 
     for try await line in AsyncBytesLineReader(source: bytes) {
       lineNumber += 1
+      bytesRead += Int64(line.count + 1)  // +1 for newline
       try Self.processLine(
         line[...],
         lineNumber: lineNumber,
@@ -118,6 +166,10 @@ public struct DOF: Sendable, Codable {
         obstacles: &obstacles,
         errorCallback: errorCallback
       )
+      progress.completedUnitCount = bytesRead
+    }
+    if progress.totalUnitCount > 0 {
+      progress.completedUnitCount = progress.totalUnitCount
     }
 
     guard let cycle else {
@@ -165,38 +217,52 @@ public struct DOF: Sendable, Codable {
   ///
   /// - Parameters:
   ///   - filePath: The URL of the DOF file.
+  ///   - progressHandler: Optional callback called before processing begins with a Progress
+  ///     object that you can use to track parsing progress.
   ///   - errorCallback: Optional callback for parse errors.
   /// - Returns: The parsed DOF.
   /// - Throws: Error if loading or parsing fails.
-  public static func from(filePath: URL, errorCallback: ((Error, Int) -> Void)? = nil) throws
-    -> Self
-  {
+  public static func from(
+    filePath: URL,
+    progressHandler: @Sendable (Progress) -> Void = { _ in },
+    errorCallback: ((Error, Int) -> Void)? = nil
+  ) throws -> Self {
     let data = try Data(contentsOf: filePath)
-    return try Self(data: data, errorCallback: errorCallback)
+    return try Self(data: data, progressHandler: progressHandler, errorCallback: errorCallback)
   }
 
   /// Load DOF data from raw data.
   ///
   /// - Parameters:
   ///   - data: The DOF file content as Data.
+  ///   - progressHandler: Optional callback called before processing begins with a Progress
+  ///     object that you can use to track parsing progress.
   ///   - errorCallback: Optional callback for parse errors.
   /// - Returns: The parsed DOF.
   /// - Throws: DOFError if parsing fails.
-  public static func from(data: Data, errorCallback: ((Error, Int) -> Void)? = nil) throws -> Self {
-    try Self(data: data, errorCallback: errorCallback)
+  public static func from(
+    data: Data,
+    progressHandler: @Sendable (Progress) -> Void = { _ in },
+    errorCallback: ((Error, Int) -> Void)? = nil
+  ) throws -> Self {
+    try Self(data: data, progressHandler: progressHandler, errorCallback: errorCallback)
   }
 
   /// Load DOF data from a file URL (async streaming).
   ///
   /// - Parameters:
   ///   - url: The URL of the DOF file.
+  ///   - progressHandler: Optional callback called before processing begins with a Progress
+  ///     object that you can use to track parsing progress.
   ///   - errorCallback: Optional callback for parse errors.
   /// - Returns: The parsed DOF.
   /// - Throws: DOFError if loading or parsing fails.
-  public static func from(url: URL, errorCallback: ((Error, Int) -> Void)? = nil) async throws
-    -> Self
-  {
-    try await Self(url: url, errorCallback: errorCallback)
+  public static func from(
+    url: URL,
+    progressHandler: @Sendable (Progress) -> Void = { _ in },
+    errorCallback: ((Error, Int) -> Void)? = nil
+  ) async throws -> Self {
+    try await Self(url: url, progressHandler: progressHandler, errorCallback: errorCallback)
   }
 
   // MARK: - Lookup Methods

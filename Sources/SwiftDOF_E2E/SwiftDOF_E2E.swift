@@ -1,5 +1,6 @@
 import Foundation
 import ArgumentParser
+import Progress
 import SwiftDOF
 
 @main
@@ -56,14 +57,31 @@ struct SwiftDOF_E2E: AsyncParsableCommand {
 
     var errorCount = 0
     let startTime = Date()
+    let showProgress = format != .json
 
-    let dof = try await loader.load { error, line in
-      errorCount += 1
-      var message = "Error at line \(line): \(error.localizedDescription)"
-      if let reason = (error as? LocalizedError)?.failureReason {
-        message += "\n - \(reason)"
+    // Set up progress tracking using actor to safely hold observation
+    let progressTracker = showProgress ? ProgressTracker() : nil
+
+    let dof = try await loader.load(
+      progressHandler: { progress in
+        if let tracker = progressTracker {
+          Task { await tracker.track(progress) }
+        }
+      },
+      errorCallback: { error, line in
+        errorCount += 1
+        var message = "Error at line \(line): \(error.localizedDescription)"
+        if let reason = (error as? LocalizedError)?.failureReason {
+          message += "\n - \(reason)"
+        }
+        FileHandle.standardError.write(Data("\(message)\n".utf8))
       }
-      FileHandle.standardError.write(Data("\(message)\n".utf8))
+    )
+
+    // Clean up observation
+    if let tracker = progressTracker {
+      await tracker.stop()
+      print()  // Move to next line after progress bar
     }
 
     let elapsed = Date().timeIntervalSince(startTime)
@@ -97,5 +115,44 @@ struct SwiftDOF_E2E: AsyncParsableCommand {
   enum OutputFormat: String, ExpressibleByArgument {
     case summary
     case json
+  }
+}
+
+// MARK: - ProgressTracker
+
+/// Actor to safely track progress using Progress.swift library.
+private actor ProgressTracker {
+  private var bar: ProgressBar?
+  private var observation: NSKeyValueObservation?
+  private var lastStep = 0
+
+  func track(_ progress: Foundation.Progress) {
+    bar = ProgressBar(
+      count: 100,
+      configuration: [
+        ProgressString(string: "Parsing:"),
+        ProgressBarLine(barLength: 40),
+        ProgressPercent()
+      ]
+    )
+
+    observation = progress.observe(\.fractionCompleted, options: [.new]) { [self] progress, _ in
+      let currentStep = Int(progress.fractionCompleted * 100)
+      Task { await self.advanceTo(currentStep) }
+    }
+  }
+
+  private func advanceTo(_ step: Int) {
+    while lastStep < step {
+      bar?.next()
+      lastStep += 1
+    }
+  }
+
+  func stop() {
+    observation?.invalidate()
+    observation = nil
+    // Ensure bar reaches 100%
+    advanceTo(100)
   }
 }

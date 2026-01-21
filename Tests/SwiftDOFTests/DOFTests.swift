@@ -135,9 +135,12 @@ struct DOFTests {
       """
 
     var errorCount = 0
-    let dof = try DOF(data: contentWithError.data(using: .utf8)!) { _, _ in
-      errorCount += 1
-    }
+    let dof = try DOF(
+      data: contentWithError.data(using: .utf8)!,
+      errorCallback: { _, _ in
+        errorCount += 1
+      }
+    )
 
     #expect(dof.count == 2)  // Only 2 valid lines
     #expect(errorCount == 1)  // 1 error for the invalid line
@@ -173,9 +176,12 @@ struct DOFTests {
   func testFromDataWithErrorCallback() throws {
     var errorCalled = false
 
-    let dof = try DOF.from(data: sampleDOFData) { _, _ in
-      errorCalled = true
-    }
+    let dof = try DOF.from(
+      data: sampleDOFData,
+      errorCallback: { _, _ in
+        errorCalled = true
+      }
+    )
 
     #expect(dof.count == 3)
     #expect(!errorCalled)  // No errors in valid content
