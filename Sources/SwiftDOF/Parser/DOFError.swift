@@ -23,7 +23,7 @@ public enum DOFFormatError: Sendable {
 
 /// Errors that can occur during DOF parsing.
 public enum DOFError: Error, LocalizedError, Sendable {
-  /// The file data is not valid ASCII encoding.
+  /// The file data is not valid Latin-1 encoding.
   case invalidEncoding
 
   /// The file format is invalid.
@@ -61,7 +61,7 @@ public enum DOFError: Error, LocalizedError, Sendable {
   public var failureReason: String? {
     switch self {
       case .invalidEncoding:
-        String(localized: "The file is not valid ASCII encoding.", bundle: .module)
+        String(localized: "The file is not valid Latin-1 encoding.", bundle: .module)
       case .invalidFormat(let error):
         switch error {
           case .missingCurrencyDate:

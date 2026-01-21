@@ -122,10 +122,10 @@ extension RandomAccessCollection where Element == UInt8, Index == Int {
   }
 
   /// Convert to trimmed String (only when actually needed).
-  /// - Throws: DOFError.invalidEncoding if bytes cannot be decoded as UTF-8.
+  /// - Throws: DOFError.invalidEncoding if bytes cannot be decoded as Latin-1.
   @inlinable
   func toString() throws -> String {
-    guard let string = String(bytes: Array(self), encoding: .utf8) else {
+    guard let string = String(bytes: Array(self), encoding: .isoLatin1) else {
       throw DOFError.invalidEncoding
     }
     return string.trimmingCharacters(in: .whitespaces)
