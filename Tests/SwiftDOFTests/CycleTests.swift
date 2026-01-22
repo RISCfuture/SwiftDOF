@@ -4,9 +4,9 @@ import Foundation
 
 struct CycleTests {
 
-  @Test("Current cycle is valid")
-  func testCurrentCycleIsValid() {
-    let cycle = Cycle.current
+  @Test("Effective cycle is valid")
+  func testEffectiveCycleIsValid() {
+    let cycle = Cycle.effective
     #expect(cycle.year >= 2025)
     #expect(cycle.month >= 1 && cycle.month <= 12)
     #expect(cycle.day >= 1 && cycle.day <= 31)
@@ -159,16 +159,16 @@ struct CycleTests {
     #expect(cycle.description == cycle.id)
   }
 
-  @Test("isCurrent returns true for current cycle")
-  func testIsCurrent() {
-    let current = Cycle.current
-    #expect(current.isCurrent)
+  @Test("isEffective returns true for effective cycle")
+  func testIsEffective() {
+    let effective = Cycle.effective
+    #expect(effective.isEffective)
 
-    // A past cycle should not be current
+    // A past cycle should not be effective
     let past = Cycle(year: 2025, month: 9, day: 1)
-    // This may or may not be current depending on when test runs
+    // This may or may not be effective depending on when test runs
     // so we just verify it doesn't crash
-    _ = past.isCurrent
+    _ = past.isEffective
   }
 
   @Test("Cycle date property returns valid date")
@@ -183,5 +183,90 @@ struct CycleTests {
     #expect(components.year == 2025)
     #expect(components.month == 9)
     #expect(components.day == 1)
+  }
+
+  @Test("dateRange covers full cycle")
+  func testDateRange() throws {
+    let cycle = Cycle(year: 2025, month: 9, day: 1)
+    let dateRange = try #require(cycle.dateRange)
+
+    // Duration should be 56 days
+    let expectedDuration: TimeInterval = 56 * 24 * 60 * 60
+    #expect(dateRange.duration == expectedDuration)
+
+    // Start should be effectiveDate
+    #expect(dateRange.start == cycle.effectiveDate)
+
+    // End should be expirationDate
+    #expect(dateRange.end == cycle.expirationDate)
+  }
+
+  @Test("contains returns true for date within cycle")
+  func testContainsDateWithinCycle() throws {
+    let cycle = Cycle(year: 2025, month: 9, day: 1)
+
+    // Create a date in the middle of the cycle (Sep 15, 2025)
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = .gmt
+    let midCycleDate = try #require(
+      calendar.date(from: DateComponents(timeZone: .gmt, year: 2025, month: 9, day: 15))
+    )
+
+    #expect(cycle.contains(midCycleDate))
+  }
+
+  @Test("contains returns false for date outside cycle")
+  func testContainsDateOutsideCycle() throws {
+    let cycle = Cycle(year: 2025, month: 9, day: 1)
+
+    // Create a date before the cycle (Aug 15, 2025)
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = .gmt
+    let beforeDate = try #require(
+      calendar.date(from: DateComponents(timeZone: .gmt, year: 2025, month: 8, day: 15))
+    )
+
+    #expect(!cycle.contains(beforeDate))
+
+    // Create a date after the cycle (Nov 1, 2025)
+    let afterDate = try #require(
+      calendar.date(from: DateComponents(timeZone: .gmt, year: 2025, month: 11, day: 1))
+    )
+
+    #expect(!cycle.contains(afterDate))
+  }
+
+  @Test("cycle(for:) returns correct cycle")
+  func testCycleForDate() throws {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = .gmt
+
+    // Sep 15, 2025 should be covered by Sep 1, 2025 cycle
+    let date = try #require(
+      calendar.date(from: DateComponents(timeZone: .gmt, year: 2025, month: 9, day: 15))
+    )
+
+    let cycle = Cycle.cycle(for: date)
+    #expect(cycle.year == 2025)
+    #expect(cycle.month == 9)
+    #expect(cycle.day == 1)
+  }
+
+  @Test("expirationDate returns exact expiration moment")
+  func testExpirationDateExactMoment() throws {
+    let cycle = Cycle(year: 2025, month: 9, day: 1)
+    let effectiveDate = try #require(cycle.effectiveDate)
+    let expirationDate = try #require(cycle.expirationDate)
+
+    // expirationDate should be exactly 56 days after effectiveDate
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = .gmt
+    let daysDifference = calendar.dateComponents([.day], from: effectiveDate, to: expirationDate)
+      .day
+    #expect(daysDifference == 56)
+
+    // expirationDate should equal the next cycle's effectiveDate
+    let nextCycle = try #require(cycle.next)
+    #expect(expirationDate == nextCycle.effectiveDate)
   }
 }

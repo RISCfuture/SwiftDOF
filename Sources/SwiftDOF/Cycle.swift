@@ -29,8 +29,8 @@ public struct Cycle: Sendable, Codable, Equatable, Hashable {
     return calendar.date(from: components)!
   }
 
-  /// The current active cycle based on today's date.
-  public static var current: Self { Self(covering: .now) }
+  /// The currently effective cycle based on today's date.
+  public static var effective: Self { Self(covering: .now) }
 
   /// The year of this cycle.
   public let year: UInt
@@ -90,8 +90,8 @@ public struct Cycle: Sendable, Codable, Equatable, Hashable {
     return daysFromDatum.isMultiple(of: Self.period)
   }
 
-  /// Whether this is the currently active cycle.
-  public var isCurrent: Bool { self == Self.current }
+  /// Whether this is the currently effective cycle.
+  public var isEffective: Bool { self == Self.effective }
 
   /// The start date components for this cycle.
   public var firstDateComponents: DateComponents {
@@ -101,6 +101,25 @@ public struct Cycle: Sendable, Codable, Equatable, Hashable {
   /// The Foundation Date representation of the start of this cycle.
   public var firstDate: Date? {
     Self.calendar.date(from: firstDateComponents)
+  }
+
+  /// The effective date of this cycle (same as ``firstDate``).
+  public var effectiveDate: Date? { firstDate }
+
+  /// The expiration date of this cycle (midnight UTC when cycle expires).
+  ///
+  /// This is the exact moment the cycle expires, which is also the effective date of the next cycle.
+  public var expirationDate: Date? {
+    guard let firstDate else { return nil }
+    return Self.calendar.date(byAdding: .day, value: Self.period, to: firstDate)
+  }
+
+  /// The date range when this cycle is effective.
+  ///
+  /// The range starts at `effectiveDate` and ends at `expirationDate` (exclusive).
+  public var dateRange: DateInterval? {
+    guard let effectiveDate, let expirationDate else { return nil }
+    return DateInterval(start: effectiveDate, end: expirationDate)
   }
 
   /// The date components for the last day of data coverage (one day before cycle start).
@@ -240,5 +259,26 @@ extension Cycle: RawRepresentable {
     }
 
     self.init(year: year, month: month, day: day)
+  }
+}
+
+// MARK: - Factory Methods
+
+extension Cycle {
+  /// Returns the cycle that contains the given date.
+  ///
+  /// - Parameter date: The date to find the cycle for.
+  /// - Returns: The cycle containing the date.
+  public static func cycle(for date: Date) -> Self {
+    Self(covering: date)
+  }
+
+  /// Returns whether the given date falls within this cycle's effective period.
+  ///
+  /// - Parameter date: The date to check.
+  /// - Returns: `true` if the date falls within this cycle's effective period.
+  public func contains(_ date: Date) -> Bool {
+    guard let dateRange else { return false }
+    return dateRange.contains(date)
   }
 }

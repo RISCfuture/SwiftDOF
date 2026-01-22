@@ -34,7 +34,7 @@ struct SwiftDOF_E2E: AsyncParsableCommand {
 
   private var currentCycleURL: URL {
     get throws {
-      let cycle = Cycle.current
+      let cycle = Cycle.effective
       guard let components = cycle.lastDateComponents else {
         throw ValidationError("Failed to calculate cycle date")
       }
