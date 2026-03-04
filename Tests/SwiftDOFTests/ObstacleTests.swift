@@ -1,6 +1,10 @@
 import Testing
 import Foundation
-import CoreLocation
+
+#if canImport(CoreLocation)
+  import CoreLocation
+#endif
+
 @testable import SwiftDOF
 
 struct ObstacleTests {
@@ -115,14 +119,16 @@ struct ObstacleTests {
     #expect(obstacle.action == .active)
   }
 
-  @Test("CoreLocation extension")
-  func testCoreLocationExtension() throws {
-    let obstacle = try DOFByteParser.parseLine(sampleLineBytes[...], lineNumber: 1)
-    let coordinate = obstacle.coreLocation
+  #if canImport(CoreLocation)
+    @Test("CoreLocation extension")
+    func testCoreLocationExtension() throws {
+      let obstacle = try DOFByteParser.parseLine(sampleLineBytes[...], lineNumber: 1)
+      let coordinate = obstacle.coreLocation
 
-    #expect(coordinate.latitude == obstacle.latitudeDeg)
-    #expect(coordinate.longitude == obstacle.longitudeDeg)
-  }
+      #expect(coordinate.latitude == obstacle.latitudeDeg)
+      #expect(coordinate.longitude == obstacle.longitudeDeg)
+    }
+  #endif
 
   @Test("Measurement extension - latitude")
   func testMeasurementLatitude() throws {

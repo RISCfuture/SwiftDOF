@@ -1,5 +1,8 @@
-import CoreLocation
 import Foundation
+
+#if canImport(CoreLocation)
+  import CoreLocation
+#endif
 
 /// Represents a single obstacle from the FAA Digital Obstacle File.
 ///
@@ -167,11 +170,13 @@ public extension Obstacle {
   }
 }
 
-// MARK: - CoreLocation Extensions
+#if canImport(CoreLocation)
+  // MARK: - CoreLocation Extensions
 
-public extension Obstacle {
-  /// The obstacle location as a CoreLocation coordinate.
-  var coreLocation: CLLocationCoordinate2D {
-    .init(latitude: latitudeDeg, longitude: longitudeDeg)
+  public extension Obstacle {
+    /// The obstacle location as a CoreLocation coordinate.
+    var coreLocation: CLLocationCoordinate2D {
+      .init(latitude: latitudeDeg, longitude: longitudeDeg)
+    }
   }
-}
+#endif
