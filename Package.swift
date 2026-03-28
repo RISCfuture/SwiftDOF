@@ -30,7 +30,7 @@ let package = Package(
     .testTarget(
       name: "SwiftDOFTests",
       dependencies: ["SwiftDOF"]
-    ),
+    )
   ],
   swiftLanguageModes: [.v5, .v6]
 )
@@ -43,7 +43,7 @@ let package = Package(
         "SwiftDOF",
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
         .product(name: "ZIPFoundation", package: "ZIPFoundation"),
-        .product(name: "Progress", package: "Progress.swift"),
+        .product(name: "Progress", package: "Progress.swift")
       ]
     )
   )

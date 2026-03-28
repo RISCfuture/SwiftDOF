@@ -115,7 +115,10 @@ public enum DOFError: Error, LocalizedError, Sendable {
             #endif
           case .invalidCurrencyDateComponents:
             #if canImport(Darwin)
-              String(localized: "The currency date contains non-numeric components.", bundle: .module)
+              String(
+                localized: "The currency date contains non-numeric components.",
+                bundle: .module
+              )
             #else
               "The currency date contains non-numeric components."
             #endif
@@ -175,7 +178,10 @@ public enum DOFError: Error, LocalizedError, Sendable {
     switch self {
       case .invalidEncoding, .invalidFormat:
         #if canImport(Darwin)
-          String(localized: "Verify the file is a valid FAA Digital Obstacle File.", bundle: .module)
+          String(
+            localized: "Verify the file is a valid FAA Digital Obstacle File.",
+            bundle: .module
+          )
         #else
           "Verify the file is a valid FAA Digital Obstacle File."
         #endif

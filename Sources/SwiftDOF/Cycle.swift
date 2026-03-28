@@ -215,8 +215,15 @@ public struct Cycle: Sendable, Codable, Equatable, Hashable {
   }
 }
 
-extension Cycle: CustomStringConvertible {
+extension Cycle: LosslessStringConvertible {
   public var description: String { id }
+
+  /// Creates a cycle from a YYYYMMDD string.
+  ///
+  /// - Parameter description: A string in YYYYMMDD format.
+  public init?(_ description: String) {
+    self.init(rawValue: description)
+  }
 }
 
 extension Cycle: Comparable {
