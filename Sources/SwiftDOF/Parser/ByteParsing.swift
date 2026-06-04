@@ -99,28 +99,6 @@ extension RandomAccessCollection where Element == UInt8, Index == Int {
     return negative ? -value : value
   }
 
-  /// Get a single byte at offset, or nil if out of bounds.
-  @inlinable
-  func byte(at offset: Int) -> UInt8? {
-    let idx = startIndex + offset
-    guard idx < endIndex else { return nil }
-    return self[idx]
-  }
-
-  /// Check if bytes match a string (trimming trailing whitespace).
-  @inlinable
-  func matches(_ string: String) -> Bool {
-    let target = Array(string.utf8)
-    var selfTrimmed = self[...]
-
-    while let last = selfTrimmed.last, last == ASCII.space {
-      selfTrimmed = selfTrimmed.dropLast()
-    }
-
-    guard selfTrimmed.count == target.count else { return false }
-    return zip(selfTrimmed, target).allSatisfy { $0 == $1 }
-  }
-
   /// Convert to trimmed String (only when actually needed).
   /// - Throws: DOFError.invalidEncoding if bytes cannot be decoded as Latin-1.
   @inlinable
