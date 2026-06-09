@@ -192,5 +192,6 @@ swift run SwiftDOF_E2E -f json > obstacles.json
 ```
 
 Options:
+
 - `-i, --input <path|url>`: Path or URL to DOF file (.dat or .zip). Defaults to current FAA cycle.
 - `-f, --format <summary|json>`: Output format. Defaults to summary.
