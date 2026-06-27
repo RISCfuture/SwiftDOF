@@ -3,6 +3,11 @@
 
 import PackageDescription
 
+let approachableConcurrency: [SwiftSetting] = [
+  .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
+  .enableUpcomingFeature("InferIsolatedConformances")
+]
+
 let package = Package(
   name: "SwiftDOF",
   defaultLocalization: "en",
@@ -25,11 +30,13 @@ let package = Package(
     // Targets can depend on other targets in this package and products from dependencies.
     .target(
       name: "SwiftDOF",
-      resources: [.process("Resources")]
+      resources: [.process("Resources")],
+      swiftSettings: approachableConcurrency
     ),
     .testTarget(
       name: "SwiftDOFTests",
-      dependencies: ["SwiftDOF"]
+      dependencies: ["SwiftDOF"],
+      swiftSettings: approachableConcurrency
     )
   ],
   swiftLanguageModes: [.v5, .v6]
@@ -44,7 +51,8 @@ let package = Package(
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
         .product(name: "ZIPFoundation", package: "ZIPFoundation"),
         .product(name: "Progress", package: "Progress.swift")
-      ]
+      ],
+      swiftSettings: approachableConcurrency
     )
   )
 #endif

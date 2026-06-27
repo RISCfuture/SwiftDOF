@@ -171,6 +171,7 @@ where Source.Element == UInt8, Source: Sendable {
       lineBuffer.reserveCapacity(lineBufferCapacity)
     }
 
+    @concurrent
     mutating func next() async throws -> [UInt8]? {
       lineBuffer.removeAll(keepingCapacity: true)
 
