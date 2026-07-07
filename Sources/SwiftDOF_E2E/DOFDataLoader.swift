@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
 import SwiftDOF
 
 /// Protocol for loading DOF data from various sources.
@@ -63,26 +66,43 @@ struct URLZipLoader: DOFDataLoader {
 struct URLStreamLoader: DOFDataLoader {
   let url: URL
 
-  func load(
-    progressHandler: @Sendable (Progress) -> Void,
-    errorCallback: @escaping (Error, Int) -> Void
-  ) async throws -> DOF {
-    let (bytes, response) = try await URLSession.shared.bytes(from: url)
+  // `URLSession.bytes(from:)` isn’t available in FoundationNetworking, so Linux falls back to
+  // buffering the whole response and parsing it synchronously instead of streaming.
+  #if canImport(FoundationNetworking)
+    func load(
+      progressHandler: @Sendable (Progress) -> Void,
+      errorCallback: @escaping (Error, Int) -> Void
+    ) async throws -> DOF {
+      let (data, response) = try await URLSession.shared.data(from: url)
 
-    if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
-      throw DOFDataLoaderError.downloadFailed(statusCode: httpResponse.statusCode)
+      if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
+        throw DOFDataLoaderError.downloadFailed(statusCode: httpResponse.statusCode)
+      }
+
+      return try DOF(data: data, progressHandler: progressHandler, errorCallback: errorCallback)
     }
+  #else
+    func load(
+      progressHandler: @Sendable (Progress) -> Void,
+      errorCallback: @escaping (Error, Int) -> Void
+    ) async throws -> DOF {
+      let (bytes, response) = try await URLSession.shared.bytes(from: url)
 
-    // Get content length for progress tracking
-    let contentLength = (response as? HTTPURLResponse)?.expectedContentLength ?? -1
+      if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
+        throw DOFDataLoaderError.downloadFailed(statusCode: httpResponse.statusCode)
+      }
 
-    return try await DOF(
-      bytes: bytes,
-      totalBytes: contentLength > 0 ? contentLength : nil,
-      progressHandler: progressHandler,
-      errorCallback: errorCallback
-    )
-  }
+      // Get content length for progress tracking
+      let contentLength = (response as? HTTPURLResponse)?.expectedContentLength ?? -1
+
+      return try await DOF(
+        bytes: bytes,
+        totalBytes: contentLength > 0 ? contentLength : nil,
+        progressHandler: progressHandler,
+        errorCallback: errorCallback
+      )
+    }
+  #endif
 }
 
 // MARK: - Errors
