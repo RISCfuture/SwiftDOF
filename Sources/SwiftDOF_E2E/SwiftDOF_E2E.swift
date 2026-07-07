@@ -121,9 +121,12 @@ struct SwiftDOF_E2E: AsyncParsableCommand {
 // MARK: - ProgressTracker
 
 /// Actor to safely track progress using Progress.swift library.
+///
+/// Polls `fractionCompleted` on a timer rather than observing it via KVO, since
+/// `NSKeyValueObservation` requires the Objective-C runtime and isn't available on Linux.
 private actor ProgressTracker {
   private var bar: ProgressBar?
-  private var observation: NSKeyValueObservation?
+  private var pollTask: Task<Void, Never>?
   private var lastStep = 0
 
   func track(_ progress: Foundation.Progress) {
@@ -136,9 +139,12 @@ private actor ProgressTracker {
       ]
     )
 
-    observation = progress.observe(\.fractionCompleted, options: [.new]) { [self] progress, _ in
-      let currentStep = Int(progress.fractionCompleted * 100)
-      Task { await self.advanceTo(currentStep) }
+    pollTask = Task {
+      while !Task.isCancelled, !progress.isFinished {
+        advanceTo(Int(progress.fractionCompleted * 100))
+        try? await Task.sleep(for: .milliseconds(50))
+      }
+      advanceTo(Int(progress.fractionCompleted * 100))
     }
   }
 
@@ -150,8 +156,8 @@ private actor ProgressTracker {
   }
 
   func stop() {
-    observation?.invalidate()
-    observation = nil
+    pollTask?.cancel()
+    pollTask = nil
     // Ensure bar reaches 100%
     advanceTo(100)
   }
