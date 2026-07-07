@@ -1,5 +1,14 @@
 # Change Log
 
+## [1.2.0] - 2026-07-06
+
+### Added
+
+- Linux support. `URLSession` is guarded behind `FoundationNetworking`, a
+  `String(localized:)` shim covers error strings, and the end-to-end tool's
+  download and progress display are adapted for Linux (buffered response and a
+  polling progress bar in place of `URLSession.bytes` and KVO).
+
 ## [1.1.0] - 2026-06-26
 
 ### Changed
