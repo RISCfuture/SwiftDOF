@@ -4,12 +4,12 @@
 
 ### Parsing a DOF
 
-- ``init(data:errorCallback:)``
-- ``init(url:errorCallback:)``
-- ``init(bytes:errorCallback:)``
-- ``from(filePath:errorCallback:)``
-- ``from(data:errorCallback:)``
-- ``from(url:errorCallback:)``
+- ``init(data:progressHandler:errorCallback:)``
+- ``init(url:progressHandler:errorCallback:)``
+- ``init(bytes:totalBytes:progressHandler:errorCallback:)``
+- ``from(filePath:progressHandler:errorCallback:)``
+- ``from(data:progressHandler:errorCallback:)``
+- ``from(url:progressHandler:errorCallback:)``
 
 ### Properties
 

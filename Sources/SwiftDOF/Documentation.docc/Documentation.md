@@ -23,7 +23,7 @@ Key features:
 SwiftDOF uses **strict parsing** - it throws errors for any malformed or invalid
 data rather than silently accepting it. This ensures data integrity and makes
 debugging easier. All parsing errors are reported via either thrown exceptions or
-the ``DOF/init(data:errorCallback:)`` callback parameter.
+the ``DOF/init(data:progressHandler:errorCallback:)`` callback parameter.
 
 ## Topics
 
