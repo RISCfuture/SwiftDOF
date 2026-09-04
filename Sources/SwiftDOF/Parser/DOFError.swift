@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// Specific format errors that can occur during DOF parsing.
 public enum DOFFormatError: Sendable {
@@ -36,7 +36,7 @@ public enum DOFError: Error, LocalizedError, Sendable {
   case fileNotFound(URL)
 
   /// An error occurred while reading the stream.
-  case streamError(Error)
+  case streamError(any Error)
 
   /// The line is too short to parse.
   case lineTooShort(expected: Int, actual: Int, line: Int)

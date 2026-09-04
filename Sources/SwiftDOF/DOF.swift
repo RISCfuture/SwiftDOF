@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// Container for DOF obstacle data.
 ///
@@ -36,7 +36,7 @@ public struct DOF: Sendable, Codable {
   public init(
     data: Data,
     progressHandler: @Sendable (Progress) -> Void = { _ in },
-    errorCallback: ((Error, Int) -> Void)? = nil
+    errorCallback: ((any Error, Int) -> Void)? = nil
   ) throws {
     var obstacles: [String: Obstacle] = [:]
     obstacles.reserveCapacity(Self.estimatedObstacleCount)
@@ -83,7 +83,7 @@ public struct DOF: Sendable, Codable {
   public init(
     url: URL,
     progressHandler: @Sendable (Progress) -> Void = { _ in },
-    errorCallback: ((Error, Int) -> Void)? = nil
+    errorCallback: ((any Error, Int) -> Void)? = nil
   ) async throws {
     var obstacles: [String: Obstacle] = [:]
     obstacles.reserveCapacity(Self.estimatedObstacleCount)
@@ -143,7 +143,7 @@ public struct DOF: Sendable, Codable {
     bytes: S,
     totalBytes: Int64? = nil,
     progressHandler: @Sendable (Progress) -> Void = { _ in },
-    errorCallback: ((Error, Int) -> Void)? = nil
+    errorCallback: ((any Error, Int) -> Void)? = nil
   ) async throws where S.Element == UInt8, S: Sendable {
     var obstacles: [String: Obstacle] = [:]
     obstacles.reserveCapacity(Self.estimatedObstacleCount)
@@ -186,7 +186,7 @@ public struct DOF: Sendable, Codable {
     lineNumber: Int,
     cycle: inout Cycle?,
     obstacles: inout [String: Obstacle],
-    errorCallback: ((Error, Int) -> Void)?
+    errorCallback: ((any Error, Int) -> Void)?
   ) throws {
     // Line 1: Parse currency date
     if lineNumber == 1 {
@@ -225,7 +225,7 @@ public struct DOF: Sendable, Codable {
   public static func from(
     filePath: URL,
     progressHandler: @Sendable (Progress) -> Void = { _ in },
-    errorCallback: ((Error, Int) -> Void)? = nil
+    errorCallback: ((any Error, Int) -> Void)? = nil
   ) throws -> Self {
     let data = try Data(contentsOf: filePath)
     return try Self(data: data, progressHandler: progressHandler, errorCallback: errorCallback)
@@ -243,7 +243,7 @@ public struct DOF: Sendable, Codable {
   public static func from(
     data: Data,
     progressHandler: @Sendable (Progress) -> Void = { _ in },
-    errorCallback: ((Error, Int) -> Void)? = nil
+    errorCallback: ((any Error, Int) -> Void)? = nil
   ) throws -> Self {
     try Self(data: data, progressHandler: progressHandler, errorCallback: errorCallback)
   }
@@ -260,7 +260,7 @@ public struct DOF: Sendable, Codable {
   public static func from(
     url: URL,
     progressHandler: @Sendable (Progress) -> Void = { _ in },
-    errorCallback: ((Error, Int) -> Void)? = nil
+    errorCallback: ((any Error, Int) -> Void)? = nil
   ) async throws -> Self {
     try await Self(url: url, progressHandler: progressHandler, errorCallback: errorCallback)
   }

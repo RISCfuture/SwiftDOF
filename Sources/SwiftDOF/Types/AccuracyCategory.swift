@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// FAA horizontal accuracy category for obstacle position data.
 ///

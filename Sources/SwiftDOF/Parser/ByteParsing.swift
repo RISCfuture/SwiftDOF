@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// Extensions for parsing numeric values directly from ASCII byte sequences.
 extension RandomAccessCollection where Element == UInt8, Index == Int {
