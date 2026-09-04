@@ -4,44 +4,44 @@ import Foundation
 
 struct CycleTests {
 
-  @Test("Effective cycle is valid")
-  func testEffectiveCycleIsValid() {
+  @Test
+  func `reports a plausible year, month, and day for the effective cycle`() {
     let cycle = Cycle.effective
     #expect(cycle.year >= 2025)
     #expect(cycle.month >= 1 && cycle.month <= 12)
     #expect(cycle.day >= 1 && cycle.day <= 31)
   }
 
-  @Test("Datum cycle (Sep 1, 2025) is valid")
-  func testDatumCycleIsValid() {
+  @Test
+  func `treats the datum cycle of Sep 1, 2025 as valid`() {
     let cycle = Cycle(year: 2025, month: 9, day: 1)
     #expect(cycle.isValid)
     #expect(cycle.id == "20250901")
   }
 
-  @Test("Second cycle (Oct 27, 2025) is valid")
-  func testSecondCycleIsValid() {
+  @Test
+  func `treats the second cycle of Oct 27, 2025 as valid`() {
     let cycle = Cycle(year: 2025, month: 10, day: 27)
     #expect(cycle.isValid)
     #expect(cycle.id == "20251027")
   }
 
-  @Test("Third cycle (Dec 22, 2025) is valid")
-  func testThirdCycleIsValid() {
+  @Test
+  func `treats the third cycle of Dec 22, 2025 as valid`() {
     let cycle = Cycle(year: 2025, month: 12, day: 22)
     #expect(cycle.isValid)
     #expect(cycle.id == "20251222")
   }
 
-  @Test("Non-boundary date is invalid")
-  func testNonBoundaryDateIsInvalid() {
+  @Test
+  func `treats a date that is not a cycle boundary as invalid`() {
     // Sep 15 is not a cycle boundary
     let cycle = Cycle(year: 2025, month: 9, day: 15)
     #expect(!cycle.isValid)
   }
 
-  @Test("Previous cycle calculation")
-  func testPreviousCycle() throws {
+  @Test
+  func `returns the preceding cycle from previous`() throws {
     let cycle = Cycle(year: 2025, month: 10, day: 27)
     let previous = try #require(cycle.previous)
     #expect(previous.year == 2025)
@@ -49,8 +49,8 @@ struct CycleTests {
     #expect(previous.day == 1)
   }
 
-  @Test("Next cycle calculation")
-  func testNextCycle() throws {
+  @Test
+  func `returns the following cycle from next`() throws {
     let cycle = Cycle(year: 2025, month: 9, day: 1)
     let next = try #require(cycle.next)
     #expect(next.year == 2025)
@@ -58,53 +58,53 @@ struct CycleTests {
     #expect(next.day == 27)
   }
 
-  @Test("Cycle comparison - less than")
-  func testCycleComparisonLessThan() {
+  @Test
+  func `orders an earlier cycle before a later one`() {
     let older = Cycle(year: 2025, month: 9, day: 1)
     let newer = Cycle(year: 2025, month: 10, day: 27)
     #expect(older < newer)
     #expect(!(newer < older))
   }
 
-  @Test("Cycle comparison - greater than")
-  func testCycleComparisonGreaterThan() {
+  @Test
+  func `orders a later cycle after an earlier one`() {
     let older = Cycle(year: 2025, month: 9, day: 1)
     let newer = Cycle(year: 2025, month: 10, day: 27)
     #expect(newer > older)
   }
 
-  @Test("Cycle equality")
-  func testCycleEquality() {
+  @Test
+  func `considers two cycles with the same date equal`() {
     let cycle1 = Cycle(year: 2025, month: 9, day: 1)
     let cycle2 = Cycle(year: 2025, month: 9, day: 1)
     #expect(cycle1 == cycle2)
   }
 
-  @Test("RawRepresentable round-trip")
-  func testRawRepresentableRoundTrip() {
+  @Test
+  func `round-trips a cycle through its raw value`() {
     let original = Cycle(year: 2025, month: 9, day: 1)
     let rawValue = original.rawValue
     let restored = Cycle(rawValue: rawValue)
     #expect(restored == original)
   }
 
-  @Test("RawRepresentable initialization with valid string")
-  func testRawRepresentableValidString() throws {
+  @Test
+  func `parses a valid raw value into year, month, and day`() throws {
     let cycle = try #require(Cycle(rawValue: "20251027"))
     #expect(cycle.year == 2025)
     #expect(cycle.month == 10)
     #expect(cycle.day == 27)
   }
 
-  @Test("RawRepresentable initialization with invalid string")
-  func testRawRepresentableInvalidString() {
+  @Test
+  func `returns nil for a malformed raw value`() {
     #expect(Cycle(rawValue: "invalid") == nil)
     #expect(Cycle(rawValue: "2025") == nil)
     #expect(Cycle(rawValue: "202509011") == nil)
   }
 
-  @Test("Cycle covering arbitrary date")
-  func testCycleCoveringArbitraryDate() throws {
+  @Test
+  func `finds the cycle covering a date mid-cycle`() throws {
     // Sep 15, 2025 should be covered by Sep 1, 2025 cycle
     let components = DateComponents(timeZone: .gmt, year: 2025, month: 9, day: 15)
     let cycle = try #require(Cycle(covering: components))
@@ -113,8 +113,8 @@ struct CycleTests {
     #expect(cycle.day == 1)
   }
 
-  @Test("Cycle covering date in second cycle")
-  func testCycleCoveringDateInSecondCycle() throws {
+  @Test
+  func `finds the cycle covering a date in the second cycle`() throws {
     // Nov 1, 2025 should be covered by Oct 27, 2025 cycle
     let components = DateComponents(timeZone: .gmt, year: 2025, month: 11, day: 1)
     let cycle = try #require(Cycle(covering: components))
@@ -123,8 +123,8 @@ struct CycleTests {
     #expect(cycle.day == 27)
   }
 
-  @Test("Cycle covering date before datum")
-  func testCycleCoveringDateBeforeDatum() throws {
+  @Test
+  func `finds the cycle covering a date before the datum`() throws {
     // Aug 15, 2025 is before datum (Sep 1), should be covered by Jul 7, 2025 (56 days before datum)
     let components = DateComponents(timeZone: .gmt, year: 2025, month: 8, day: 15)
     let cycle = try #require(Cycle(covering: components))
@@ -133,8 +133,8 @@ struct CycleTests {
     #expect(cycle.day == 7)
   }
 
-  @Test("Cycle covering date exactly on pre-datum boundary")
-  func testCycleCoveringDateExactlyOnPreDatumBoundary() throws {
+  @Test
+  func `finds a valid cycle for a date exactly on a pre-datum boundary`() throws {
     // Jul 7, 2025 is exactly 56 days before datum
     let components = DateComponents(timeZone: .gmt, year: 2025, month: 7, day: 7)
     let cycle = try #require(Cycle(covering: components))
@@ -144,8 +144,8 @@ struct CycleTests {
     #expect(cycle.isValid)
   }
 
-  @Test("Cycle ID format")
-  func testCycleIdFormat() {
+  @Test
+  func `formats the ID as a zero-padded year, month, and day`() {
     let cycle = Cycle(year: 2025, month: 9, day: 1)
     #expect(cycle.id == "20250901")
 
@@ -153,14 +153,14 @@ struct CycleTests {
     #expect(cycle2.id == "20261215")
   }
 
-  @Test("Cycle description equals ID")
-  func testCycleDescriptionEqualsId() {
+  @Test
+  func `describes a cycle by its ID`() {
     let cycle = Cycle(year: 2025, month: 9, day: 1)
     #expect(cycle.description == cycle.id)
   }
 
-  @Test("isEffective returns true for effective cycle")
-  func testIsEffective() {
+  @Test
+  func `reports the current cycle as effective`() {
     let effective = Cycle.effective
     #expect(effective.isEffective)
 
@@ -171,8 +171,8 @@ struct CycleTests {
     _ = past.isEffective
   }
 
-  @Test("Cycle date property returns valid date")
-  func testCycleDateProperty() throws {
+  @Test
+  func `returns the first date of the cycle in GMT`() throws {
     let cycle = Cycle(year: 2025, month: 9, day: 1)
     let date = try #require(cycle.firstDate)
 
@@ -185,8 +185,8 @@ struct CycleTests {
     #expect(components.day == 1)
   }
 
-  @Test("dateRange covers full cycle")
-  func testDateRange() throws {
+  @Test
+  func `spans 56 days from the effective date to the expiration date`() throws {
     let cycle = Cycle(year: 2025, month: 9, day: 1)
     let dateRange = try #require(cycle.dateRange)
 
@@ -201,8 +201,8 @@ struct CycleTests {
     #expect(dateRange.end == cycle.expirationDate)
   }
 
-  @Test("contains returns true for date within cycle")
-  func testContainsDateWithinCycle() throws {
+  @Test
+  func `contains a date inside the cycle`() throws {
     let cycle = Cycle(year: 2025, month: 9, day: 1)
 
     // Create a date in the middle of the cycle (Sep 15, 2025)
@@ -215,8 +215,8 @@ struct CycleTests {
     #expect(cycle.contains(midCycleDate))
   }
 
-  @Test("contains returns false for date outside cycle")
-  func testContainsDateOutsideCycle() throws {
+  @Test
+  func `excludes dates before and after the cycle`() throws {
     let cycle = Cycle(year: 2025, month: 9, day: 1)
 
     // Create a date before the cycle (Aug 15, 2025)
@@ -236,8 +236,8 @@ struct CycleTests {
     #expect(!cycle.contains(afterDate))
   }
 
-  @Test("cycle(for:) returns correct cycle")
-  func testCycleForDate() throws {
+  @Test
+  func `returns the cycle covering a given date`() throws {
     var calendar = Calendar(identifier: .gregorian)
     calendar.timeZone = .gmt
 
@@ -252,8 +252,8 @@ struct CycleTests {
     #expect(cycle.day == 1)
   }
 
-  @Test("expirationDate returns exact expiration moment")
-  func testExpirationDateExactMoment() throws {
+  @Test
+  func `expires 56 days after the effective date, when the next cycle begins`() throws {
     let cycle = Cycle(year: 2025, month: 9, day: 1)
     let effectiveDate = try #require(cycle.effectiveDate)
     let expirationDate = try #require(cycle.expirationDate)
