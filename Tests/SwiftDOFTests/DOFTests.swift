@@ -23,8 +23,8 @@ struct DOFTests {
     sampleDOFContent.data(using: .utf8)!
   }
 
-  @Test("Parse DOF data")
-  func testParseDOFData() throws {
+  @Test
+  func `parses obstacles and the currency date from DOF data`() throws {
     let dof = try DOF(data: sampleDOFData)
 
     #expect(dof.count == 3)
@@ -33,8 +33,8 @@ struct DOFTests {
     #expect(dof.cycle.day == 21)
   }
 
-  @Test("Lookup obstacle by ID")
-  func testLookupByID() throws {
+  @Test
+  func `looks up an obstacle by its OAS number`() throws {
     let dof = try DOF(data: sampleDOFData)
 
     let obstacle = try #require(dof.obstacle(for: "01-001307"))
@@ -42,30 +42,30 @@ struct DOFTests {
     #expect(obstacle.type == "RIG")
   }
 
-  @Test("Lookup non-existent obstacle returns nil")
-  func testLookupNonExistent() throws {
+  @Test
+  func `returns nil for an unknown OAS number`() throws {
     let dof = try DOF(data: sampleDOFData)
 
     let obstacle = dof.obstacle(for: "99-999999")
     #expect(obstacle == nil)
   }
 
-  @Test("All property returns all obstacles")
-  func testAllProperty() throws {
+  @Test
+  func `returns every obstacle from all`() throws {
     let dof = try DOF(data: sampleDOFData)
 
     let all = dof.all
     #expect(all.count == 3)
   }
 
-  @Test("Count property")
-  func testCountProperty() throws {
+  @Test
+  func `counts the parsed obstacles`() throws {
     let dof = try DOF(data: sampleDOFData)
     #expect(dof.count == 3)
   }
 
-  @Test("Sequence conformance - iteration")
-  func testSequenceIteration() throws {
+  @Test
+  func `iterates over every obstacle as a sequence`() throws {
     let dof = try DOF(data: sampleDOFData)
 
     var count = 0
@@ -75,16 +75,16 @@ struct DOFTests {
     #expect(count == 3)
   }
 
-  @Test("Collection conformance")
-  func testCollectionConformance() throws {
+  @Test
+  func `exposes obstacles as a non-empty collection`() throws {
     let dof = try DOF(data: sampleDOFData)
 
     #expect(!dof.isEmpty)
     #expect(dof.startIndex != dof.endIndex)
   }
 
-  @Test("Filter obstacles by state")
-  func testFilterByState() throws {
+  @Test
+  func `filters obstacles by state`() throws {
     let dof = try DOF(data: sampleDOFData)
 
     let alObstacles = dof.obstacles(in: "AL")
@@ -94,8 +94,8 @@ struct DOFTests {
     #expect(caObstacles.isEmpty)
   }
 
-  @Test("DOF is Codable")
-  func testCodable() throws {
+  @Test
+  func `round-trips a DOF through JSON`() throws {
     let dof = try DOF(data: sampleDOFData)
 
     let encoder = JSONEncoder()
@@ -108,8 +108,8 @@ struct DOFTests {
     #expect(decoded.cycle == dof.cycle)
   }
 
-  @Test("Parse currency date")
-  func testParseCurrencyDate() throws {
+  @Test
+  func `parses the currency date header into a cycle`() throws {
     let bytes: [UInt8] = Array("  CURRENCY DATE = 12/21/25".utf8)
     let cycle = try DOFByteParser.parseCurrencyDate(bytes[...])
 
@@ -118,8 +118,8 @@ struct DOFTests {
     #expect(cycle.day == 21)
   }
 
-  @Test("Error callback is invoked for malformed lines")
-  func testErrorCallback() throws {
+  @Test
+  func `invokes the error callback for a malformed line and skips it`() throws {
     let contentWithError = """
       CURRENCY DATE = 12/21/25
                                          LATITUDE     LONGITUDE     OBSTACLE             AGL   \
@@ -146,15 +146,15 @@ struct DOFTests {
     #expect(errorCount == 1)  // 1 error for the invalid line
   }
 
-  @Test("Empty data throws error")
-  func testEmptyData() {
+  @Test
+  func `throws when the data is empty`() {
     #expect(throws: DOFError.self) {
       try DOF(data: Data())
     }
   }
 
-  @Test("Data with only header produces empty DOF")
-  func testOnlyHeader() throws {
+  @Test
+  func `parses a header-only file into an empty DOF`() throws {
     let headerOnly = """
       CURRENCY DATE = 12/21/25
       HEADER
@@ -166,14 +166,14 @@ struct DOFTests {
     #expect(dof.cycle.year == 2025)
   }
 
-  @Test("From data factory method")
-  func testFromData() throws {
+  @Test
+  func `parses obstacles through the from(data:) factory`() throws {
     let dof = try DOF.from(data: sampleDOFData)
     #expect(dof.count == 3)
   }
 
-  @Test("From data with error callback")
-  func testFromDataWithErrorCallback() throws {
+  @Test
+  func `leaves the error callback uncalled for valid data`() throws {
     var errorCalled = false
 
     let dof = try DOF.from(
