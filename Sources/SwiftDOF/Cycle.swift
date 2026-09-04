@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// Represents a DOF publication cycle.
 ///

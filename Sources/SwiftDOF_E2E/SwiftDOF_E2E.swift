@@ -71,7 +71,7 @@ struct SwiftDOF_E2E: AsyncParsableCommand {
       errorCallback: { error, line in
         errorCount += 1
         var message = "Error at line \(line): \(error.localizedDescription)"
-        if let reason = (error as? LocalizedError)?.failureReason {
+        if let reason = (error as? (any LocalizedError))?.failureReason {
           message += "\n - \(reason)"
         }
         FileHandle.standardError.write(Data("\(message)\n".utf8))
@@ -95,7 +95,7 @@ struct SwiftDOF_E2E: AsyncParsableCommand {
     try formatter.format(dof: dof, errorCount: errorCount, elapsed: elapsed, to: stdout)
   }
 
-  private func makeLoader(for url: URL) -> DOFDataLoader {
+  private func makeLoader(for url: URL) -> any DOFDataLoader {
     if url.isFileURL {
       return FileDataLoader(url: url)
     }
@@ -105,7 +105,7 @@ struct SwiftDOF_E2E: AsyncParsableCommand {
     return URLStreamLoader(url: url)
   }
 
-  private func makeFormatter(for format: OutputFormat) -> OutputFormatter {
+  private func makeFormatter(for format: OutputFormat) -> any OutputFormatter {
     switch format {
       case .summary: return SummaryOutputFormatter()
       case .json: return JSONOutputFormatter()

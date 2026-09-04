@@ -1,7 +1,7 @@
-import Foundation
+public import Foundation
 
 #if canImport(CoreLocation)
-  import CoreLocation
+  public import CoreLocation
 #endif
 
 /// Represents a single obstacle from the FAA Digital Obstacle File.

@@ -13,7 +13,7 @@ protocol DOFDataLoader {
   /// - Returns: The parsed DOF data.
   func load(
     progressHandler: @Sendable (Progress) -> Void,
-    errorCallback: @escaping (Error, Int) -> Void
+    errorCallback: @escaping (any Error, Int) -> Void
   ) async throws -> DOF
 }
 
@@ -25,7 +25,7 @@ struct FileDataLoader: DOFDataLoader {
 
   func load(
     progressHandler: @Sendable (Progress) -> Void,
-    errorCallback: @escaping (Error, Int) -> Void
+    errorCallback: @escaping (any Error, Int) -> Void
   ) throws -> DOF {
     let data: Data
     if url.pathExtension.lowercased() == "zip" {
@@ -46,7 +46,7 @@ struct URLZipLoader: DOFDataLoader {
 
   func load(
     progressHandler: @Sendable (Progress) -> Void,
-    errorCallback: @escaping (Error, Int) -> Void
+    errorCallback: @escaping (any Error, Int) -> Void
   ) async throws -> DOF {
     let (downloadedData, response) = try await URLSession.shared.data(from: url)
 
@@ -84,7 +84,7 @@ struct URLStreamLoader: DOFDataLoader {
   #else
     func load(
       progressHandler: @Sendable (Progress) -> Void,
-      errorCallback: @escaping (Error, Int) -> Void
+      errorCallback: @escaping (any Error, Int) -> Void
     ) async throws -> DOF {
       let (bytes, response) = try await URLSession.shared.bytes(from: url)
 
