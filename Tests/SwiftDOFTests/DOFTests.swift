@@ -23,6 +23,11 @@ struct DOFTests {
     sampleDOFContent.data(using: .utf8)!
   }
 
+  /// A URL in the temporary directory that no file occupies.
+  private static func temporaryFileURL() -> URL {
+    FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).dat")
+  }
+
   @Test
   func `parses obstacles and the currency date from DOF data`() throws {
     let dof = try DOF(data: sampleDOFData)
@@ -173,6 +178,41 @@ struct DOFTests {
   }
 
   @Test
+  func `parses obstacles streamed from a file on disk`() throws {
+    let dof = try withTemporaryFile(containing: sampleDOFContent) {
+      try DOF.from(filePath: $0)
+    }
+
+    #expect(dof.count == 3)
+    #expect(dof.cycle.year == 2025)
+  }
+
+  @Test(arguments: [1, 7, 64, 4096])
+  func `reads the same lines from a file whatever the buffer size`(_ bufferSize: Int) throws {
+    let lines = try withTemporaryFile(containing: sampleDOFContent) { url in
+      var reader = FileLineReader(url: url, bufferSize: bufferSize)
+      var lines: [[UInt8]] = []
+      while let line = try reader.next() {
+        lines.append(line)
+      }
+      return lines
+    }
+
+    #expect(lines == sampleDOFContent.split(separator: "\n").map { Array($0.utf8) })
+  }
+
+  @Test
+  func `throws a file-not-found error for a missing file`() {
+    let missingFile = Self.temporaryFileURL()
+
+    let error = #expect(throws: DOFError.self) {
+      try DOF.from(filePath: missingFile)
+    }
+
+    #expect(error?.isFileNotFound == true)
+  }
+
+  @Test
   func `leaves the error callback uncalled for valid data`() throws {
     var errorCalled = false
 
@@ -185,5 +225,23 @@ struct DOFTests {
 
     #expect(dof.count == 3)
     #expect(!errorCalled)  // No errors in valid content
+  }
+
+  /// Writes `content` to a temporary file, hands its URL to `body`, and removes the file after.
+  private func withTemporaryFile<T>(
+    containing content: String,
+    _ body: (URL) throws -> T
+  ) throws -> T {
+    let url = Self.temporaryFileURL()
+    try content.write(to: url, atomically: true, encoding: .utf8)
+    defer { try? FileManager.default.removeItem(at: url) }
+    return try body(url)
+  }
+}
+
+extension DOFError {
+  fileprivate var isFileNotFound: Bool {
+    if case .fileNotFound = self { return true }
+    return false
   }
 }

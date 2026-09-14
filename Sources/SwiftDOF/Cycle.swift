@@ -26,7 +26,10 @@ public struct Cycle: Sendable, Codable, Equatable, Hashable {
       month: datum.month,
       day: datum.day
     )
-    return calendar.date(from: components)!
+    guard let date = calendar.date(from: components) else {
+      preconditionFailure("The DOF datum is not a valid Gregorian date")
+    }
+    return date
   }
 
   /// The currently effective cycle based on today's date.
@@ -42,34 +45,10 @@ public struct Cycle: Sendable, Codable, Equatable, Hashable {
   public let day: UInt8
 
   /// The cycle preceding this one (56 days earlier).
-  public var previous: Self? {
-    guard let firstDate,
-      let previousDate = Self.calendar.date(byAdding: .day, value: -Self.period, to: firstDate)
-    else {
-      return nil
-    }
-    let components = Self.calendar.dateComponents([.year, .month, .day], from: previousDate)
-    return Self(
-      year: UInt(components.year!),
-      month: UInt8(components.month!),
-      day: UInt8(components.day!)
-    )
-  }
+  public var previous: Self? { cycle(offsetByDays: -Self.period) }
 
   /// The cycle following this one (56 days later).
-  public var next: Self? {
-    guard let firstDate,
-      let nextDate = Self.calendar.date(byAdding: .day, value: Self.period, to: firstDate)
-    else {
-      return nil
-    }
-    let components = Self.calendar.dateComponents([.year, .month, .day], from: nextDate)
-    return Self(
-      year: UInt(components.year!),
-      month: UInt8(components.month!),
-      day: UInt8(components.day!)
-    )
-  }
+  public var next: Self? { cycle(offsetByDays: Self.period) }
 
   /// Whether this cycle falls on a valid cycle boundary.
   ///
@@ -212,6 +191,31 @@ public struct Cycle: Sendable, Codable, Equatable, Hashable {
     }
 
     self.init(year: UInt(year), month: UInt8(month), day: UInt8(day))
+  }
+
+  /// Creates a cycle from date components that already fall on a cycle boundary.
+  ///
+  /// - Parameter components: Components carrying a year, month, and day.
+  private init?(dateComponents components: DateComponents) {
+    guard let year = components.year,
+      let month = components.month,
+      let day = components.day
+    else {
+      return nil
+    }
+    self.init(year: UInt(year), month: UInt8(month), day: UInt8(day))
+  }
+
+  /// The cycle whose start date is `days` away from this one's.
+  private func cycle(offsetByDays days: Int) -> Self? {
+    guard let firstDate,
+      let shiftedDate = Self.calendar.date(byAdding: .day, value: days, to: firstDate)
+    else {
+      return nil
+    }
+    return Self(
+      dateComponents: Self.calendar.dateComponents([.year, .month, .day], from: shiftedDate)
+    )
   }
 }
 
