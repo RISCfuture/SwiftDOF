@@ -163,9 +163,6 @@ struct AsyncDOFLineReader: AsyncSequence, Sendable {
   struct AsyncIterator: AsyncIteratorProtocol {
     private var reader: FileLineReader
 
-    /// Total bytes read from the file so far.
-    var bytesRead: Int64 { reader.bytesRead }
-
     init(reader: FileLineReader) {
       self.reader = reader
     }
