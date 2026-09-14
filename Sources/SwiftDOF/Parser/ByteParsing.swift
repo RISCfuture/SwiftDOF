@@ -102,7 +102,7 @@ extension RandomAccessCollection where Element == UInt8, Index == Int {
   /// Convert to trimmed String (only when actually needed).
   /// - Throws: DOFError.invalidEncoding if bytes cannot be decoded as Latin-1.
   @inlinable
-  func toString() throws -> String {
+  func toString() throws(DOFError) -> String {
     guard let string = String(bytes: Array(self), encoding: .isoLatin1) else {
       throw DOFError.invalidEncoding
     }

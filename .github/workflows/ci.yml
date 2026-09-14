@@ -5,11 +5,9 @@
 # Category C (tools-version 6.3):                macos-15 + 6.3, macos-26 + 6.3
 # Linux:                                         ubuntu + Swift 6.3
 #
-# This package is Category A, plus a Linux leg on Swift 6.3. Test names are raw
+# This package is Category A, plus a Linux leg. Test names are raw
 # identifiers (SE-0451), so a leg must be on Swift 6.2 or newer to run `swift test`;
 # a leg on an older compiler is limited to `swift build -v`.
-#
-# When Swift 6.4 ships: add 6.4 legs alongside 6.2
 
 name: CI
 
@@ -32,8 +30,12 @@ jobs:
         include:
           - os: macos-26
             swift: "6.2"
+          - os: macos-26
+            swift: "6.4"
           - os: ubuntu-latest
             swift: "6.3"
+          - os: ubuntu-latest
+            swift: "6.4"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6

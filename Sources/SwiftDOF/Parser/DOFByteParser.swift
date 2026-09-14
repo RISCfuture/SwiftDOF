@@ -34,8 +34,13 @@ struct DOFByteParser: Sendable {
   /// Minimum line length required for parsing.
   static let minimumLineLength = 127
 
-  /// Pattern to match in currency date header.
-  private static let currencyDatePattern: [UInt8] = Array("CURRENCY DATE = ".utf8)
+  /// The bytes of "CURRENCY DATE = ", the pattern preceding the date in the DOF header.
+  private static let currencyDatePattern: InlineArray<16, UInt8> = [
+    UInt8(ascii: "C"), UInt8(ascii: "U"), UInt8(ascii: "R"), UInt8(ascii: "R"),
+    UInt8(ascii: "E"), UInt8(ascii: "N"), UInt8(ascii: "C"), UInt8(ascii: "Y"),
+    UInt8(ascii: " "), UInt8(ascii: "D"), UInt8(ascii: "A"), UInt8(ascii: "T"),
+    UInt8(ascii: "E"), UInt8(ascii: " "), UInt8(ascii: "="), UInt8(ascii: " ")
+  ]
 
   // MARK: Public API
 
@@ -43,7 +48,7 @@ struct DOFByteParser: Sendable {
   static func parseLine<T: RandomAccessCollection>(
     _ bytes: T,
     lineNumber: Int = 0
-  ) throws -> Obstacle where T.Element == UInt8, T.Index == Int {
+  ) throws(DOFError) -> Obstacle where T.Element == UInt8, T.Index == Int {
     guard bytes.count >= minimumLineLength else {
       throw DOFError.lineTooShort(
         expected: minimumLineLength,
@@ -170,26 +175,12 @@ struct DOFByteParser: Sendable {
   /// Expects format: "CURRENCY DATE = MM/DD/YY"
   static func parseCurrencyDate<T: RandomAccessCollection>(
     _ bytes: T
-  ) throws -> Cycle where T.Element == UInt8, T.Index == Int {
-    // Find pattern
-    var matchStart: Int?
-    for i in bytes.startIndex..<(bytes.endIndex - currencyDatePattern.count) {
-      let slice = bytes[i..<(i + currencyDatePattern.count)]
-      guard zip(slice, currencyDatePattern).allSatisfy({ $0 == $1 }) else { continue }
-      matchStart = i + currencyDatePattern.count
-      break
-    }
-
-    guard let start = matchStart else {
+  ) throws(DOFError) -> Cycle where T.Element == UInt8, T.Index == Int {
+    guard let start = currencyDateStart(in: bytes) else {
       throw DOFError.invalidFormat(.currencyDateHeaderNotFound)
     }
 
-    // Find slash positions in date portion
-    let dateBytes = bytes[start...]
-    var slashPositions: [Int] = []
-    for (i, byte) in dateBytes.enumerated() where byte == ASCII.slash {
-      slashPositions.append(start + i)
-    }
+    let slashPositions = (start..<bytes.endIndex).filter { bytes[$0] == ASCII.slash }
 
     guard slashPositions.count >= 2 else {
       throw DOFError.invalidFormat(.invalidCurrencyDateFormat)
@@ -212,6 +203,25 @@ struct DOFByteParser: Sendable {
 
   // MARK: Private Helpers
 
+  /// The index just past the currency date pattern, or `nil` when the pattern is absent.
+  private static func currencyDateStart<T: RandomAccessCollection>(
+    in bytes: T
+  ) -> Int? where T.Element == UInt8, T.Index == Int {
+    let patternLength = currencyDatePattern.count
+    guard bytes.count >= patternLength else { return nil }
+
+    return (bytes.startIndex..<(bytes.endIndex - patternLength))
+      .first { matchesCurrencyDatePattern(bytes, at: $0) }
+      .map { $0 + patternLength }
+  }
+
+  private static func matchesCurrencyDatePattern<T: RandomAccessCollection>(
+    _ bytes: T,
+    at start: Int
+  ) -> Bool where T.Element == UInt8, T.Index == Int {
+    currencyDatePattern.indices.allSatisfy { bytes[start + $0] == currencyDatePattern[$0] }
+  }
+
   private static func slice<T: RandomAccessCollection>(
     _ bytes: T,
     _ base: Int,
@@ -224,7 +234,7 @@ struct DOFByteParser: Sendable {
     _ bytes: T,
     base: Int,
     lineNumber: Int
-  ) throws -> Double where T.Element == UInt8, T.Index == Int {
+  ) throws(DOFError) -> Double where T.Element == UInt8, T.Index == Int {
     let degSlice = slice(bytes, base, fields.latDegrees)
     let minSlice = slice(bytes, base, fields.latMinutes)
     let secSlice = slice(bytes, base, fields.latSeconds)
@@ -268,7 +278,7 @@ struct DOFByteParser: Sendable {
     _ bytes: T,
     base: Int,
     lineNumber: Int
-  ) throws -> Double where T.Element == UInt8, T.Index == Int {
+  ) throws(DOFError) -> Double where T.Element == UInt8, T.Index == Int {
     let degSlice = slice(bytes, base, fields.lonDegrees)
     let minSlice = slice(bytes, base, fields.lonMinutes)
     let secSlice = slice(bytes, base, fields.lonSeconds)
@@ -314,7 +324,7 @@ struct DOFByteParser: Sendable {
   private static func parseJulianDate<T: RandomAccessCollection>(
     _ bytes: T,
     lineNumber: Int
-  ) throws -> DateComponents where T.Element == UInt8, T.Index == Int {
+  ) throws(DOFError) -> DateComponents where T.Element == UInt8, T.Index == Int {
     // Format: YYYYDDD (e.g., 2014138 = year 2014, day 138)
     let yearSlice = bytes.prefix(4)
     let daySlice = bytes.dropFirst(4)
