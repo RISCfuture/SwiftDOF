@@ -1,5 +1,17 @@
 # Change Log
 
+## [Unreleased]
+
+### Changed
+
+- Adopt typed throws across the parsing surface: `DOF.init(data:)`, `DOF.init(url:)`, the `DOF.from(…)` factories, and `DOFByteParser` now declare `throws(DOFError)`, and the DOF file line reader's `AsyncIteratorProtocol.Failure` is `DOFError`. `AsyncBytesLineReader` propagates its source sequence's own `Failure` type.
+- `DOF.from(filePath:)` streams the file in chunks instead of reading it into memory in its entirety. A file that cannot be opened now throws `DOFError.fileNotFound` rather than a Foundation file-read error.
+- Match the header's "CURRENCY DATE = " marker against an `InlineArray<16, UInt8>`, removing a heap allocation from currency date parsing.
+
+### Fixed
+
+- `Cycle.previous`, `Cycle.next`, and the cycle datum date no longer force-unwrap optionals.
+
 ## [1.3.0] - 2026-09-14
 
 ### Changed

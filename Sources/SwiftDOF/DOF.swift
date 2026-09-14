@@ -37,7 +37,7 @@ public struct DOF: Sendable, Codable {
     data: Data,
     progressHandler: @Sendable (Progress) -> Void = { _ in },
     errorCallback: ((any Error, Int) -> Void)? = nil
-  ) throws {
+  ) throws(DOFError) {
     var obstacles: [String: Obstacle] = [:]
     obstacles.reserveCapacity(Self.estimatedObstacleCount)
 
@@ -84,7 +84,7 @@ public struct DOF: Sendable, Codable {
     url: URL,
     progressHandler: @Sendable (Progress) -> Void = { _ in },
     errorCallback: ((any Error, Int) -> Void)? = nil
-  ) async throws {
+  ) async throws(DOFError) {
     var obstacles: [String: Obstacle] = [:]
     obstacles.reserveCapacity(Self.estimatedObstacleCount)
 
@@ -180,6 +180,47 @@ public struct DOF: Sendable, Codable {
     self.obstaclesByID = obstacles
   }
 
+  /// Creates a DOF container by streaming a file from disk without holding it all in memory.
+  private init(
+    streamingFrom url: URL,
+    progressHandler: @Sendable (Progress) -> Void,
+    errorCallback: ((any Error, Int) -> Void)?
+  ) throws(DOFError) {
+    var obstacles: [String: Obstacle] = [:]
+    obstacles.reserveCapacity(Self.estimatedObstacleCount)
+
+    var lineNumber = 0
+    var cycle: Cycle?
+
+    var reader = FileLineReader(url: url)
+
+    // Setup progress tracking based on file size
+    let progress = Progress(totalUnitCount: reader.fileSize ?? -1)
+    progressHandler(progress)
+
+    while let line = try reader.next() {
+      lineNumber += 1
+      try Self.processLine(
+        line[...],
+        lineNumber: lineNumber,
+        cycle: &cycle,
+        obstacles: &obstacles,
+        errorCallback: errorCallback
+      )
+      progress.completedUnitCount = reader.bytesRead
+    }
+    if progress.totalUnitCount > 0 {
+      progress.completedUnitCount = progress.totalUnitCount
+    }
+
+    guard let cycle else {
+      throw DOFError.invalidFormat(.missingCurrencyDate)
+    }
+
+    self.cycle = cycle
+    self.obstaclesByID = obstacles
+  }
+
   /// Process a single line from the DOF file.
   private static func processLine(
     _ line: ArraySlice<UInt8>,
@@ -187,7 +228,7 @@ public struct DOF: Sendable, Codable {
     cycle: inout Cycle?,
     obstacles: inout [String: Obstacle],
     errorCallback: ((any Error, Int) -> Void)?
-  ) throws {
+  ) throws(DOFError) {
     // Line 1: Parse currency date
     if lineNumber == 1 {
       cycle = try DOFByteParser.parseCurrencyDate(line)
@@ -213,7 +254,7 @@ public struct DOF: Sendable, Codable {
 
   // MARK: - Static Factory Methods
 
-  /// Load DOF data from a file path (synchronous).
+  /// Load DOF data from a file path (synchronous), streaming the file from disk.
   ///
   /// - Parameters:
   ///   - filePath: The URL of the DOF file.
@@ -221,14 +262,17 @@ public struct DOF: Sendable, Codable {
   ///     object that you can use to track parsing progress.
   ///   - errorCallback: Optional callback for parse errors.
   /// - Returns: The parsed DOF.
-  /// - Throws: Error if loading or parsing fails.
+  /// - Throws: ``DOFError`` if loading or parsing fails.
   public static func from(
     filePath: URL,
     progressHandler: @Sendable (Progress) -> Void = { _ in },
     errorCallback: ((any Error, Int) -> Void)? = nil
-  ) throws -> Self {
-    let data = try Data(contentsOf: filePath)
-    return try Self(data: data, progressHandler: progressHandler, errorCallback: errorCallback)
+  ) throws(DOFError) -> Self {
+    try Self(
+      streamingFrom: filePath,
+      progressHandler: progressHandler,
+      errorCallback: errorCallback
+    )
   }
 
   /// Load DOF data from raw data.
@@ -244,7 +288,7 @@ public struct DOF: Sendable, Codable {
     data: Data,
     progressHandler: @Sendable (Progress) -> Void = { _ in },
     errorCallback: ((any Error, Int) -> Void)? = nil
-  ) throws -> Self {
+  ) throws(DOFError) -> Self {
     try Self(data: data, progressHandler: progressHandler, errorCallback: errorCallback)
   }
 
@@ -261,7 +305,7 @@ public struct DOF: Sendable, Codable {
     url: URL,
     progressHandler: @Sendable (Progress) -> Void = { _ in },
     errorCallback: ((any Error, Int) -> Void)? = nil
-  ) async throws -> Self {
+  ) async throws(DOFError) -> Self {
     try await Self(url: url, progressHandler: progressHandler, errorCallback: errorCallback)
   }
 

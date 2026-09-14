@@ -45,13 +45,11 @@ struct DOFLineReader: Sequence, IteratorProtocol, Sendable {
   }
 }
 
-// MARK: - AsyncDOFLineReader
+// MARK: - FileLineReader
 
-/// Async line reader for streaming DOF data from a file URL.
-/// Reads in chunks to minimize memory usage for large files.
-struct AsyncDOFLineReader: AsyncSequence, Sendable {
-  typealias Element = [UInt8]
-
+/// Line reader that streams DOF data from a file on disk.
+/// Reads in chunks so a large file is never held in memory in its entirety.
+struct FileLineReader: Sendable {
   /// Default read buffer size (64KB).
   static let defaultBufferSize = 65536
 
@@ -60,83 +58,120 @@ struct AsyncDOFLineReader: AsyncSequence, Sendable {
 
   private let url: URL
   private let bufferSize: Int
+  private var handle: FileHandle?
+  private var buffer: [UInt8] = []
+  private var bufferPosition = 0
+  private var lineBuffer: [UInt8] = []
+  private var isAtEnd = false
 
   /// The total size of the file in bytes, if known.
   let fileSize: Int64?
 
+  /// Total bytes read from the file so far.
+  private(set) var bytesRead: Int64 = 0
+
+  private var bufferIsExhausted: Bool { bufferPosition >= buffer.count }
+
   init(url: URL, bufferSize: Int = defaultBufferSize) {
     self.url = url
     self.bufferSize = bufferSize
-    // Try to get file size for progress tracking
-    if let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
-      let size = attrs[.size] as? Int64
-    {
-      self.fileSize = size
-    } else {
-      self.fileSize = nil
+    self.fileSize = Self.sizeOfFile(at: url)
+    lineBuffer.reserveCapacity(Self.lineBufferCapacity)
+  }
+
+  /// The size in bytes of the file at `url`, if it can be determined.
+  static func sizeOfFile(at url: URL) -> Int64? {
+    guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path) else {
+      return nil
     }
+    return attributes[.size] as? Int64
+  }
+
+  /// Returns the next line, or `nil` once the file is exhausted.
+  mutating func next() throws(DOFError) -> [UInt8]? {
+    guard !isAtEnd else { return nil }
+
+    let handle = try openedHandle()
+    lineBuffer.removeAll(keepingCapacity: true)
+
+    while true {
+      if bufferIsExhausted {
+        guard let chunk = try readChunk(from: handle), !chunk.isEmpty else {
+          isAtEnd = true
+          return lineBuffer.isEmpty ? nil : lineBuffer
+        }
+        bytesRead += Int64(chunk.count)
+        buffer = Array(chunk)
+        bufferPosition = 0
+      }
+
+      let byte = buffer[bufferPosition]
+      bufferPosition += 1
+
+      if byte == ASCII.LF {
+        // Strip trailing CR if present (handles CRLF)
+        if lineBuffer.last == ASCII.CR {
+          lineBuffer.removeLast()
+        }
+        return lineBuffer
+      }
+      lineBuffer.append(byte)
+    }
+  }
+
+  private mutating func openedHandle() throws(DOFError) -> FileHandle {
+    if let handle { return handle }
+    guard let opened = try? FileHandle(forReadingFrom: url) else {
+      throw DOFError.fileNotFound(url)
+    }
+    handle = opened
+    return opened
+  }
+
+  private func readChunk(from handle: FileHandle) throws(DOFError) -> Data? {
+    do {
+      return try handle.read(upToCount: bufferSize)
+    } catch {
+      throw DOFError.streamError(error)
+    }
+  }
+}
+
+// MARK: - AsyncDOFLineReader
+
+/// Async façade over ``FileLineReader`` for `for await` iteration of a DOF file.
+struct AsyncDOFLineReader: AsyncSequence, Sendable {
+  typealias Element = [UInt8]
+  typealias Failure = DOFError
+
+  private let url: URL
+  private let bufferSize: Int
+
+  /// The total size of the file in bytes, if known.
+  let fileSize: Int64?
+
+  init(url: URL, bufferSize: Int = FileLineReader.defaultBufferSize) {
+    self.url = url
+    self.bufferSize = bufferSize
+    self.fileSize = FileLineReader.sizeOfFile(at: url)
   }
 
   func makeAsyncIterator() -> AsyncIterator {
-    AsyncIterator(url: url, bufferSize: bufferSize)
+    AsyncIterator(reader: FileLineReader(url: url, bufferSize: bufferSize))
   }
 
   struct AsyncIterator: AsyncIteratorProtocol {
-    private let url: URL
-    private let bufferSize: Int
-    private var handle: FileHandle?
-    private var buffer: [UInt8] = []
-    private var bufferPos: Int = 0
-    private var lineBuffer: [UInt8] = []
-    private var isEOF = false
+    private var reader: FileLineReader
 
     /// Total bytes read from the file so far.
-    private(set) var bytesRead: Int64 = 0
+    var bytesRead: Int64 { reader.bytesRead }
 
-    init(url: URL, bufferSize: Int) {
-      self.url = url
-      self.bufferSize = bufferSize
-      self.lineBuffer.reserveCapacity(lineBufferCapacity)
+    init(reader: FileLineReader) {
+      self.reader = reader
     }
 
-    mutating func next() throws -> [UInt8]? {
-      guard !isEOF else { return nil }
-
-      // Lazily open file handle on first call
-      if handle == nil {
-        handle = try FileHandle(forReadingFrom: url)
-      }
-      guard let handle else { preconditionFailure("handle was nil") }
-
-      lineBuffer.removeAll(keepingCapacity: true)
-
-      while true {
-        // Refill buffer if exhausted
-        if bufferPos >= buffer.count {
-          guard let chunk = try handle.read(upToCount: bufferSize),
-            !chunk.isEmpty
-          else {
-            isEOF = true
-            // Return any remaining content as final line
-            return lineBuffer.isEmpty ? nil : lineBuffer
-          }
-          bytesRead += Int64(chunk.count)
-          buffer = Array(chunk)
-          bufferPos = 0
-        }
-
-        let byte = buffer[bufferPos]
-        bufferPos += 1
-
-        if byte == ASCII.LF {
-          // Strip trailing CR if present (handles CRLF)
-          if lineBuffer.last == ASCII.CR {
-            lineBuffer.removeLast()
-          }
-          return lineBuffer
-        }
-        lineBuffer.append(byte)
-      }
+    mutating func next() throws(DOFError) -> [UInt8]? {
+      try reader.next()
     }
   }
 }
@@ -148,6 +183,7 @@ struct AsyncDOFLineReader: AsyncSequence, Sendable {
 struct AsyncBytesLineReader<Source: AsyncSequence>: AsyncSequence, Sendable
 where Source.Element == UInt8, Source: Sendable {
   typealias Element = [UInt8]
+  typealias Failure = Source.Failure
 
   /// Pre-allocated capacity for line buffer (DOF lines are ~128 bytes).
   private static var lineBufferCapacity: Int { 256 }
@@ -172,10 +208,10 @@ where Source.Element == UInt8, Source: Sendable {
     }
 
     @concurrent
-    mutating func next() async throws -> [UInt8]? {
+    mutating func next() async throws(Source.Failure) -> [UInt8]? {
       lineBuffer.removeAll(keepingCapacity: true)
 
-      while let byte = try await iterator.next() {
+      while let byte = try await iterator.next(isolation: nil) {
         if byte == ASCII.LF {
           // Strip trailing CR if present (handles CRLF)
           if lineBuffer.last == ASCII.CR {
