@@ -1,5 +1,23 @@
 # Change Log
 
+## [1.3.0] - 2026-09-14
+
+### Changed
+
+- Lower the platform floor from macOS 26, iOS 26, watchOS 26, tvOS 26, and
+  visionOS 26 to macOS 15, iOS 18, watchOS 11, tvOS 18, and visionOS 2. Nothing
+  in the package used a macOS 26 API; the floor sits at 15 rather than lower
+  because `DateComponents.dayOfYear`, which reads the DOF's YYYYDDD Julian date
+  field, is available from macOS 15 onward.
+- Require swift-argument-parser 1.8.2 and swift-docc-plugin 1.5.0 as the minimum
+  versions of those dependencies.
+
+### Fixed
+
+- The six symbol links in the DocC catalog resolve again. They named the
+  initializers that the progress-handling API replaced, so the rendered
+  documentation shipped with dead links.
+
 ## [1.2.0] - 2026-07-06
 
 ### Added
