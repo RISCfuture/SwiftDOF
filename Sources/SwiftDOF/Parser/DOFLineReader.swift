@@ -26,10 +26,10 @@ struct DOFLineReader: Sequence, IteratorProtocol, Sendable {
     lineBuffer.removeAll(keepingCapacity: true)
 
     // Scan until LF or end of data
-    data.withUnsafeBytes { buffer in
-      let bytes = buffer.bindMemory(to: UInt8.self)
+    unsafe data.withUnsafeBytes { buffer in
+      let bytes = unsafe buffer.bindMemory(to: UInt8.self)
       while position < bytes.count {
-        let byte = bytes[position]
+        let byte = unsafe bytes[position]
         position += 1
         if byte == ASCII.LF { return }
         lineBuffer.append(byte)
