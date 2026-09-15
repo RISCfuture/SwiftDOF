@@ -36,7 +36,7 @@ The DOF format is documented at <https://www.faa.gov/air_traffic/flight_info/aer
 ## Requirements
 
 - Swift 6.2+
-- macOS 15+, iOS 18+, watchOS 11+, tvOS 18+, or visionOS 2+
+- macOS 26+, iOS 26+, watchOS 26+, tvOS 26+, or visionOS 26+
 
 ## Installation
 
