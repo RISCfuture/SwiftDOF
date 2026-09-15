@@ -58,7 +58,7 @@ struct SwiftDOF_E2E: AsyncParsableCommand {
       else {
         fatalError("Current cycle could not be determined")
       }
-      let filename = String(format: "DOF_%02d%02d%02d.zip", year % 100, month, day)
+      let filename = unsafe String(format: "DOF_%02d%02d%02d.zip", year % 100, month, day)
       guard let url = URL(string: "https://aeronav.faa.gov/Obst_Data/\(filename)") else {
         fatalError("Current DOF URL could not be determined")
       }

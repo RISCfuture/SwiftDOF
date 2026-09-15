@@ -241,7 +241,7 @@ extension Cycle: Comparable {
 extension Cycle: Identifiable {
   /// The unique identifier for this cycle in YYYYMMDD format.
   public var id: String {
-    String(format: "%04d%02d%02d", year, month, day)
+    unsafe String(format: "%04d%02d%02d", year, month, day)
   }
 }
 

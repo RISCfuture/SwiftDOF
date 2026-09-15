@@ -17,9 +17,10 @@ protocol OutputFormatter {
 extension OutputStream {
   func write(_ string: String) {
     guard let data = string.data(using: .utf8) else { return }
-    data.withUnsafeBytes { buffer in
-      guard let pointer = buffer.baseAddress?.assumingMemoryBound(to: UInt8.self) else { return }
-      write(pointer, maxLength: buffer.count)
+    unsafe data.withUnsafeBytes { buffer in
+      guard let pointer = unsafe buffer.baseAddress?.assumingMemoryBound(to: UInt8.self)
+      else { return }
+      unsafe write(pointer, maxLength: buffer.count)
     }
   }
 
@@ -48,9 +49,10 @@ struct JSONOutputFormatter: OutputFormatter {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
     let jsonData = try encoder.encode(dof.all)
-    jsonData.withUnsafeBytes { buffer in
-      guard let pointer = buffer.baseAddress?.assumingMemoryBound(to: UInt8.self) else { return }
-      stream.write(pointer, maxLength: buffer.count)
+    unsafe jsonData.withUnsafeBytes { buffer in
+      guard let pointer = unsafe buffer.baseAddress?.assumingMemoryBound(to: UInt8.self)
+      else { return }
+      unsafe stream.write(pointer, maxLength: buffer.count)
     }
   }
 }
