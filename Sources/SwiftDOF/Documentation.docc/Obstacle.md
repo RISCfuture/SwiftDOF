@@ -32,7 +32,11 @@
 
 - ``lighting``
 - ``marking``
+
+### Accuracy
+
 - ``horizontalAccuracy``
+- ``verticalAccuracy``
 
 ### Administrative
 

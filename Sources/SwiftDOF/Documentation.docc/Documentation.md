@@ -43,7 +43,8 @@ the ``DOF/init(data:progressHandler:errorCallback:)`` callback parameter.
 - ``MarkingType``
 - ``ActionCode``
 - ``VerificationStatus``
-- ``AccuracyCategory``
+- ``HorizontalAccuracy``
+- ``VerticalAccuracy``
 
 ### Errors
 
