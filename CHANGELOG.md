@@ -6,6 +6,14 @@
 
 - `Obstacle.verticalAccuracy`, the accuracy category of an obstacle's reported
   height, read from column 100 of the DOF record.
+- A `DOF Cycle Watch` workflow that parses each 56-day cycle as the FAA releases
+  it and opens an issue when a cycle fails to parse, when counts drift from the
+  previous cycle, or when the file declares a currency date other than the one
+  its URL should hold.
+- `SwiftDOF_E2E --report` writes a JSON report of a parse — counts, per-region
+  totals, and the field each failed line failed on — and `--baseline` compares
+  those counts against an earlier report. The tool now exits non-zero when any
+  line fails to parse.
 
 ### Changed
 

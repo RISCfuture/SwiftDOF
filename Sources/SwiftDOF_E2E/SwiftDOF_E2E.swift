@@ -32,6 +32,22 @@ struct SwiftDOF_E2E: AsyncParsableCommand {
   @Option(name: .shortAndLong, help: "Output format: summary or json")
   var format: OutputFormat = .summary
 
+  @Option(
+    name: .long,
+    help: "Path to write a JSON report of the parse to",
+    completion: .file(extensions: ["json"]),
+    transform: { URL(filePath: $0) }
+  )
+  var report: URL?
+
+  @Option(
+    name: .long,
+    help: "Path to an earlier report to compare counts against",
+    completion: .file(extensions: ["json"]),
+    transform: { URL(filePath: $0) }
+  )
+  var baseline: URL?
+
   private var currentCycleURL: URL {
     get throws {
       let cycle = Cycle.effective
@@ -56,6 +72,7 @@ struct SwiftDOF_E2E: AsyncParsableCommand {
     let formatter = makeFormatter(for: format)
 
     var errorCount = 0
+    var errorSamples: [Report.ErrorSample] = []
     let startTime = Date()
     let showProgress = format != .json
 
@@ -70,6 +87,7 @@ struct SwiftDOF_E2E: AsyncParsableCommand {
       },
       errorCallback: { error, line in
         errorCount += 1
+        errorSamples.append(.init(line: line, error: error))
         var message = "Error at line \(line): \(error.localizedDescription)"
         if let reason = (error as? (any LocalizedError))?.failureReason {
           message += "\n - \(reason)"
@@ -93,6 +111,44 @@ struct SwiftDOF_E2E: AsyncParsableCommand {
     defer { stdout.close() }
 
     try formatter.format(dof: dof, errorCount: errorCount, elapsed: elapsed, to: stdout)
+
+    if let report {
+      try writeReport(
+        to: report,
+        dof: dof,
+        source: inputURL,
+        errorCount: errorCount,
+        errorSamples: errorSamples,
+        elapsed: elapsed
+      )
+    }
+
+    if errorCount > 0 {
+      throw ExitCode.failure
+    }
+  }
+
+  /// Writes the JSON report, comparing counts against `baseline` when one was given.
+  private func writeReport(
+    to url: URL,
+    dof: DOF,
+    source: URL,
+    errorCount: Int,
+    errorSamples: [Report.ErrorSample],
+    elapsed: TimeInterval
+  ) throws {
+    let report = Report(
+      dof: dof,
+      source: source.absoluteString,
+      parseErrorCount: errorCount,
+      errorSamples: errorSamples,
+      elapsed: elapsed,
+      baseline: try baseline.map { try Report.read(from: $0) }
+    )
+
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    try encoder.encode(report).write(to: url)
   }
 
   private func makeLoader(for url: URL) -> any DOFDataLoader {

@@ -195,3 +195,21 @@ Options:
 
 - `-i, --input <path|url>`: Path or URL to DOF file (.dat or .zip). Defaults to current FAA cycle.
 - `-f, --format <summary|json>`: Output format. Defaults to summary.
+- `--report <path>`: Write a JSON report of the parse — obstacle count, parse
+  errors and the field each one failed on, and per-region counts.
+- `--baseline <path>`: Compare counts against an earlier report and record any
+  that moved more than their tolerance.
+
+The tool exits non-zero when any line fails to parse.
+
+### Cycle Watch
+
+The `DOF Cycle Watch` workflow parses each new 56-day cycle as the FAA releases
+it. A daily probe checks whether the cycle in effect is downloadable yet, and
+the first time it is, the cycle is parsed end to end and its report kept as an
+artifact — both the record that the cycle was checked and the baseline the next
+cycle's counts are compared against. Parse errors, counts that drift, or a file
+declaring the wrong currency date each open an issue naming the cycle.
+
+To re-check a cycle by hand, run the workflow and give it the currency date from
+the filename, as `YYYY-MM-DD`.
