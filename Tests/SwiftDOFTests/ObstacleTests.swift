@@ -9,11 +9,17 @@ import Foundation
 
 struct ObstacleTests {
 
-  // Sample DOF record line as bytes
-  let sampleLineBytes: [UInt8] = Array(
+  // Sample DOF record line
+  let sampleLine =
     "01-001307 O US AL DAUPHIN ISLAND   30 10 45.00N 088 04 39.00W RIG                1 00236 00236 R 5 D M 1990ASO01578OE C 2014138 "
-      .utf8
-  )
+
+  var sampleLineBytes: [UInt8] { Array(sampleLine.utf8) }
+
+  /// The range of a single one-indexed DOF column, as the FAA README numbers them.
+  private func column(_ oneIndexed: Int) -> Range<String.Index> {
+    let start = sampleLine.index(sampleLine.startIndex, offsetBy: oneIndexed - 1)
+    return start..<sampleLine.index(after: start)
+  }
 
   @Test
   func `parses every field of a valid obstacle line`() throws {
@@ -29,8 +35,9 @@ struct ObstacleTests {
     #expect(obstacle.heightFtAGL == 236)
     #expect(obstacle.heightFtMSL == 236)
     #expect(obstacle.lighting == .red)
-    #expect(obstacle.horizontalAccuracy == .category5)
-    #expect(obstacle.marking == .paintAndFlags)
+    #expect(obstacle.horizontalAccuracy == .code5)
+    #expect(obstacle.verticalAccuracy == .codeD)
+    #expect(obstacle.marking == .marked)
     #expect(obstacle.action == .changed)
     #expect(obstacle.lastUpdatedComponents.year == 2014)
     #expect(obstacle.lastUpdatedComponents.dayOfYear == 138)
@@ -174,11 +181,32 @@ struct ObstacleTests {
   }
 
   @Test
-  func `maps accuracy categories to their tolerances in feet`() {
-    #expect(AccuracyCategory.category1.accuracy == Measurement(value: 20, unit: .feet))
-    #expect(AccuracyCategory.category5.accuracy == Measurement(value: 500, unit: .feet))
-    #expect(AccuracyCategory.category9.accuracy == nil)  // Unknown
-    #expect(AccuracyCategory.survey.accuracy == Measurement(value: 3, unit: .feet))
+  func `maps horizontal accuracy codes to their tolerances`() {
+    #expect(HorizontalAccuracy.code1.tolerance == Measurement(value: 20, unit: .feet))
+    #expect(HorizontalAccuracy.code5.tolerance == Measurement(value: 500, unit: .feet))
+    #expect(HorizontalAccuracy.code7.tolerance == Measurement(value: 0.5, unit: .nauticalMiles))
+    #expect(HorizontalAccuracy.code9.tolerance == nil)  // Unknown
+  }
+
+  @Test
+  func `maps vertical accuracy codes to their tolerances in feet`() {
+    #expect(VerticalAccuracy.codeA.tolerance == Measurement(value: 3, unit: .feet))
+    #expect(VerticalAccuracy.codeD.tolerance == Measurement(value: 50, unit: .feet))
+    #expect(VerticalAccuracy.codeI.tolerance == nil)  // Unknown
+  }
+
+  @Test
+  func `reads the accuracy and marking columns as unknown when they are blank`() throws {
+    let blankColumns =
+      sampleLine
+      .replacingCharacters(in: column(98), with: " ")
+      .replacingCharacters(in: column(100), with: " ")
+      .replacingCharacters(in: column(102), with: " ")
+    let obstacle = try DOFByteParser.parseLine(Array(blankColumns.utf8)[...], lineNumber: 1)
+
+    #expect(obstacle.horizontalAccuracy == .code9)
+    #expect(obstacle.verticalAccuracy == .codeI)
+    #expect(obstacle.marking == .unknown)
   }
 
   @Test

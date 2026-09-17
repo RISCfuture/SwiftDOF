@@ -65,8 +65,11 @@ public struct Obstacle: Sendable, Codable {
   /// The type of lighting installed on the obstacle.
   public let lighting: LightingType
 
-  /// The horizontal accuracy category.
-  public let horizontalAccuracy: AccuracyCategory
+  /// The accuracy category of the obstacle's reported position.
+  public let horizontalAccuracy: HorizontalAccuracy
+
+  /// The accuracy category of the obstacle's reported height.
+  public let verticalAccuracy: VerticalAccuracy
 
   /// The marking type (paint, flags, etc.).
   public let marking: MarkingType
@@ -103,7 +106,8 @@ public struct Obstacle: Sendable, Codable {
     heightFtAGL: Int,
     heightFtMSL: Int,
     lighting: LightingType,
-    horizontalAccuracy: AccuracyCategory,
+    horizontalAccuracy: HorizontalAccuracy,
+    verticalAccuracy: VerticalAccuracy,
     marking: MarkingType,
     studyNumber: String,
     action: ActionCode,
@@ -122,6 +126,7 @@ public struct Obstacle: Sendable, Codable {
     self.heightFtMSL = heightFtMSL
     self.lighting = lighting
     self.horizontalAccuracy = horizontalAccuracy
+    self.verticalAccuracy = verticalAccuracy
     self.marking = marking
     self.studyNumber = studyNumber
     self.action = action

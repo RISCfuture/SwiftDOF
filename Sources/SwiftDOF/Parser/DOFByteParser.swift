@@ -23,9 +23,9 @@ struct DOFByteParser: Sendable {
     aglHeight: 83..<88,
     mslHeight: 89..<94,
     lighting: 95..<96,
-    accuracyH: 97..<98,
-    marking: 99..<100,
-    faaIndicator: 101..<102,
+    horizontalAccuracy: 97..<98,
+    verticalAccuracy: 99..<100,
+    marking: 101..<102,
     studyNumber: 103..<117,
     action: 118..<119,
     lastUpdated: 120..<127
@@ -94,14 +94,29 @@ struct DOFByteParser: Sendable {
       )
     }
 
-    // AccuracyCategory: space means unknown (category9)
-    let accuracyByte = bytes[base + fields.accuracyH.lowerBound]
+    // Both accuracy columns are blank when the FAA has not categorized the obstacle.
+    let horizontalAccuracyByte = bytes[base + fields.horizontalAccuracy.lowerBound]
     guard
-      let accuracy = AccuracyCategory(byte: accuracyByte == ASCII.space ? ASCII.nine : accuracyByte)
+      let horizontalAccuracy = HorizontalAccuracy(
+        byte: horizontalAccuracyByte == ASCII.space ? ASCII.nine : horizontalAccuracyByte
+      )
     else {
       throw DOFError.parseError(
-        field: "accuracy",
-        value: String(UnicodeScalar(accuracyByte)),
+        field: "horizontalAccuracy",
+        value: String(UnicodeScalar(horizontalAccuracyByte)),
+        line: lineNumber
+      )
+    }
+
+    let verticalAccuracyByte = bytes[base + fields.verticalAccuracy.lowerBound]
+    guard
+      let verticalAccuracy = VerticalAccuracy(
+        byte: verticalAccuracyByte == ASCII.space ? ASCII.I : verticalAccuracyByte
+      )
+    else {
+      throw DOFError.parseError(
+        field: "verticalAccuracy",
+        value: String(UnicodeScalar(verticalAccuracyByte)),
         line: lineNumber
       )
     }
@@ -115,11 +130,9 @@ struct DOFByteParser: Sendable {
       )
     }
 
-    // MarkingType: 'N' and space are aliases for 'A' (none)
+    // MarkingType: a blank column means the marking is unknown.
     let markingByte = bytes[base + fields.marking.lowerBound]
-    let normalizedMarkingByte =
-      (markingByte == ASCII.N || markingByte == ASCII.space) ? ASCII.A : markingByte
-    guard let marking = MarkingType(byte: normalizedMarkingByte) else {
+    guard let marking = MarkingType(byte: markingByte == ASCII.space ? ASCII.U : markingByte) else {
       throw DOFError.parseError(
         field: "marking",
         value: String(UnicodeScalar(markingByte)),
@@ -163,7 +176,8 @@ struct DOFByteParser: Sendable {
       heightFtAGL: agl,
       heightFtMSL: msl,
       lighting: lighting,
-      horizontalAccuracy: accuracy,
+      horizontalAccuracy: horizontalAccuracy,
+      verticalAccuracy: verticalAccuracy,
       marking: marking,
       studyNumber: studyNumber,
       action: action,
