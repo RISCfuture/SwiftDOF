@@ -1,0 +1,480 @@
+name: DOF Cycle Watch
+
+# The FAA releases each 56-day DOF the day after it takes effect — the published schedule runs
+# "reflects changes to" August 02, released August 04, for the cycle effective August 03 — so
+# unlike NASR there is no window in which the incoming cycle can be parsed early. The watch
+# therefore tracks the cycle already in effect. A cheap probe gates the expensive parse; the
+# report artifact, named for the cycle, doubles as the record of what has already been checked.
+
+on:
+  schedule:
+    - cron: "0 16 * * *"
+  workflow_dispatch:
+    inputs:
+      cycle:
+        description: "Cycle to check, as the YYYY-MM-DD currency date in its filename. Blank uses the cycle in effect."
+        required: false
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: Look for a new cycle
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      issues: write
+    outputs:
+      cycle: ${{ steps.target.outputs.cycle }}
+      cycle-id: ${{ steps.target.outputs.cycle-id }}
+      previous-cycle: ${{ steps.target.outputs.previous-cycle }}
+      url: ${{ steps.availability.outputs.url }}
+      parse: ${{ steps.decide.outputs.parse }}
+    steps:
+      - name: Resolve the target cycle
+        id: target
+        env:
+          REQUESTED: ${{ inputs.cycle }}
+        run: |
+          set -euo pipefail
+
+          # Cycles take effect every 56 days from 2025-09-01. The FAA names the file for the last
+          # day of coverage, the day before, which is also the currency date in its header — so
+          # that is the identity used throughout, and it is what the report has to agree with.
+          period=$(( 56 * 86400 ))
+          datum=$(date -u -d 2025-09-01 +%s)
+          index=$(( ($(date -u +%s) - datum) / period ))
+          currency=$(( datum + index * period - 86400 ))
+
+          if [ -n "$REQUESTED" ]; then
+            if ! requested=$(date -u -d "$REQUESTED" +%s 2>/dev/null); then
+              echo "::error::'$REQUESTED' is not a date. Use YYYY-MM-DD."
+              exit 1
+            fi
+            if [ $(( (requested - (datum - 86400)) % period )) -ne 0 ]; then
+              echo "::error::$REQUESTED is not a DOF currency date; they fall every 56 days from 2025-08-31."
+              exit 1
+            fi
+            currency=$requested
+          fi
+
+          {
+            echo "cycle=$(date -u -d "@$currency" +%F)"
+            echo "cycle-id=$(date -u -d "@$currency" +%Y%m%d)"
+            echo "previous-cycle=$(date -u -d "@$(( currency - period ))" +%F)"
+            echo "effective=$(date -u -d "@$(( currency + 86400 ))" +%F)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check whether the FAA has published it
+        id: availability
+        env:
+          CYCLE: ${{ steps.target.outputs.cycle }}
+          EFFECTIVE: ${{ steps.target.outputs.effective }}
+        run: |
+          set -euo pipefail
+
+          # aeronav.faa.gov answers HEAD honestly, so no range-GET workaround is needed here.
+          url="https://aeronav.faa.gov/Obst_Data/DOF_$(date -u -d "$CYCLE" +%y%m%d).zip"
+          code=$(curl --silent --show-error --location --head \
+                      --retry 3 --retry-delay 10 --retry-all-errors \
+                      --dump-header headers.txt --output /dev/null \
+                      --write-out '%{http_code}' "$url" || echo 000)
+          echo "HEAD $url -> $code"
+
+          if [ "$code" = "200" ]; then
+            available=true
+          else
+            available=false
+          fi
+
+          # Last-Modified is the mirror's re-sync time, not the release date: the file released on
+          # 2026-08-04 reported a Last-Modified of 2026-09-14. It is recorded, never relied on.
+          modified=$(grep -i '^last-modified:' headers.txt | tail -n 1 | cut -d' ' -f2- | tr -d '\r')
+          size=$(grep -i '^content-length:' headers.txt | tail -n 1 | cut -d' ' -f2- | tr -d '\r')
+          days_since=$(( ( $(date -u +%s) - $(date -u -d "$EFFECTIVE" +%s) ) / 86400 ))
+
+          # Release lands one day after the cycle takes effect. A week of silence means the FAA
+          # slipped or the URL shape changed, either of which looks like an ordinary quiet day.
+          if [ "$available" != "true" ] && [ "$days_since" -ge 7 ]; then
+            overdue=true
+          else
+            overdue=false
+          fi
+
+          {
+            echo "available=$available"
+            echo "overdue=$overdue"
+            echo "days-since=$days_since"
+            echo "last-modified=$modified"
+            echo "size=$size"
+            echo "code=$code"
+            echo "url=$url"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Decide whether to parse
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          CYCLE: ${{ steps.target.outputs.cycle }}
+          AVAILABLE: ${{ steps.availability.outputs.available }}
+          DAYS_SINCE: ${{ steps.availability.outputs.days-since }}
+          SIZE: ${{ steps.availability.outputs.size }}
+          REQUESTED: ${{ inputs.cycle }}
+          ARTIFACT: dof-report-${{ steps.target.outputs.cycle }}
+        run: |
+          set -euo pipefail
+
+          note() { echo "$1"; echo "$1" >> "$GITHUB_STEP_SUMMARY"; }
+
+          if [ "$AVAILABLE" != "true" ]; then
+            note "Cycle $CYCLE is not downloadable yet; it took effect $DAYS_SINCE day(s) ago."
+            echo "parse=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ -n "$REQUESTED" ]; then
+            note "Re-checking cycle $CYCLE on request."
+            echo "parse=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # An existing report artifact is the record that this cycle was already checked.
+          found=$(gh api "repos/$GH_REPO/actions/artifacts?name=$ARTIFACT&per_page=100" \
+            --jq '[.artifacts[] | select(.name == env.ARTIFACT and .expired == false)] | length')
+
+          if [ "$found" -gt 0 ]; then
+            note "Cycle $CYCLE has already been checked."
+            echo "parse=false" >> "$GITHUB_OUTPUT"
+          else
+            note "Cycle $CYCLE is new ($SIZE bytes, in effect $DAYS_SINCE day(s))."
+            echo "parse=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Report a cycle the FAA never published
+        if: steps.availability.outputs.overdue == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          CYCLE: ${{ steps.target.outputs.cycle }}
+          EFFECTIVE: ${{ steps.target.outputs.effective }}
+          DAYS_SINCE: ${{ steps.availability.outputs.days-since }}
+          URL: ${{ steps.availability.outputs.url }}
+          CODE: ${{ steps.availability.outputs.code }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          {
+            echo "Cycle **$CYCLE** took effect on $EFFECTIVE, $DAYS_SINCE day(s) ago, and is still"
+            echo "not downloadable. The FAA normally releases the day after a cycle takes effect,"
+            echo "so either this cycle slipped or the download URL has changed shape."
+            echo
+            echo "| URL | HEAD |"
+            echo "|---|---|"
+            echo "| \`$URL\` | $CODE |"
+            echo
+            echo "[View the run]($RUN_URL)"
+          } > issue-body.md
+
+          title="DOF cycle $CYCLE was never published"
+          number=$(TITLE="$title" gh issue list --state all --search "DOF cycle $CYCLE in:title" \
+            --json number,title --jq 'map(select(.title == env.TITLE)) | .[0].number // empty')
+
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body-file issue-body.md
+          else
+            gh issue create --title "$title" --body-file issue-body.md
+          fi
+
+  parse:
+    name: Parse the cycle
+    needs: probe
+    if: needs.probe.outputs.parse == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    env:
+      CYCLE: ${{ needs.probe.outputs.cycle }}
+      CYCLE_ID: ${{ needs.probe.outputs.cycle-id }}
+      PREVIOUS_CYCLE: ${{ needs.probe.outputs.previous-cycle }}
+      URL: ${{ needs.probe.outputs.url }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Name the report and the log
+        run: |
+          set -euo pipefail
+          {
+            echo "REPORT=$RUNNER_TEMP/report.json"
+            echo "PARSE_LOG=$RUNNER_TEMP/parse.log"
+          } >> "$GITHUB_ENV"
+
+      - uses: SwiftyLab/setup-swift@latest
+        with:
+          swift-version: "6.4"
+
+      - name: Cache SwiftPM build products
+        # Usually misses: 56 days between runs is well past the seven-day idle eviction. It earns
+        # its place when a cycle is re-checked by hand after a fix.
+        uses: actions/cache@v6
+        with:
+          path: |
+            .build
+            ~/.cache/org.swift.swiftpm
+          key: swiftpm-cyclewatch-ubuntu-latest-swift6.4-${{ hashFiles('Package.resolved') }}
+
+      - name: Build
+        # Release: a debug build cannot get through 650,000 fixed-width records in any useful time.
+        run: swift build -c release --product SwiftDOF_E2E
+
+      - name: Fetch the previous cycle's report
+        id: baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ARTIFACT: dof-report-${{ needs.probe.outputs.previous-cycle }}
+        run: |
+          set -euo pipefail
+
+          # download-artifact cannot reach another run's artifact without that run's id, which is
+          # itself state to keep somewhere; the name already carries the cycle.
+          id=$(gh api "repos/$GH_REPO/actions/artifacts?name=$ARTIFACT&per_page=100" \
+            --jq '[.artifacts[] | select(.name == env.ARTIFACT and .expired == false)]
+                  | max_by(.id) | .id // empty')
+
+          if [ -z "$id" ]; then
+            echo "No report for $PREVIOUS_CYCLE; this cycle becomes the baseline for the next one."
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          gh api "repos/$GH_REPO/actions/artifacts/$id/zip" > previous.zip
+          unzip -o -q previous.zip -d previous
+
+          # A run that crashed before writing its report still uploaded its log, so the artifact
+          # existing does not mean there is anything to compare against.
+          if [ -f previous/report.json ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "The report for $PREVIOUS_CYCLE holds no counts; the comparison is skipped."
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Parse the cycle
+        id: parse
+        env:
+          BASELINE_FOUND: ${{ steps.baseline.outputs.found }}
+        run: |
+          set -euo pipefail
+
+          args=(--input "$URL" --report "$REPORT")
+          if [ "$BASELINE_FOUND" = "true" ]; then
+            args+=(--baseline previous/report.json)
+          fi
+
+          # The exit code is captured, not propagated: the report still has to be uploaded,
+          # summarized, and turned into an issue.
+          status=0
+          .build/release/SwiftDOF_E2E "${args[@]}" 2>&1 | tee "$PARSE_LOG" || status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the report
+        # Uploaded before anything reads it, and on failure too: this artifact is also the record
+        # that the cycle was checked, so a broken cycle is reported once rather than every day.
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dof-report-${{ needs.probe.outputs.cycle }}
+          path: |
+            ${{ runner.temp }}/report.json
+            ${{ runner.temp }}/parse.log
+          retention-days: 90
+          if-no-files-found: warn
+
+      - name: Read the verdict out of the report
+        id: verdict
+        if: always()
+        run: |
+          set -euo pipefail
+
+          failed=unknown
+          drift=0
+          declared=
+          if [ -f "$REPORT" ]; then
+            failed=$(jq -r '.failed' "$REPORT")
+            drift=$(jq '.drift | length' "$REPORT")
+            declared=$(jq -r '.cycle' "$REPORT")
+          fi
+
+          # The header's currency date is computed independently of this workflow's arithmetic, so
+          # a disagreement means one of the two is wrong about which cycle this file even is.
+          if [ -n "$declared" ] && [ "$declared" != "$CYCLE_ID" ]; then
+            mismatch=true
+            echo "::error::The file at $URL declares cycle $declared, not $CYCLE_ID."
+          else
+            mismatch=false
+          fi
+
+          {
+            echo "failed=$failed"
+            echo "drift=$drift"
+            echo "declared=$declared"
+            echo "mismatch=$mismatch"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Write the job summary
+        if: always()
+        env:
+          DECLARED: ${{ steps.verdict.outputs.declared }}
+        run: |
+          set -euo pipefail
+
+          if [ ! -f "$REPORT" ]; then
+            echo "The run produced no report for cycle \`$CYCLE\`; see the log." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          {
+            echo "## DOF cycle $CYCLE"
+            echo
+            echo "- Source: \`$URL\`"
+            echo "- Cycle the file declares: \`$DECLARED\`"
+            echo "- Obstacles parsed: $(jq -r '.obstacleCount' "$REPORT")"
+            echo "- Parse errors: $(jq -r '.parseErrorCount' "$REPORT")"
+            echo "- Outcome: $(jq -r 'if .failed then "**failed**" else "clean" end' "$REPORT")"
+            jq -r '.failureReasons[]? | "  - \(.)"' "$REPORT"
+            echo
+
+            if [ "$(jq '.drift | length' "$REPORT")" -gt 0 ]; then
+              echo "### Count drift against $PREVIOUS_CYCLE"
+              echo
+              echo "| Region | $PREVIOUS_CYCLE | $CYCLE | Reason |"
+              echo "|---|---:|---:|---|"
+              jq -r '.drift[] | "| \(.scope) | \(.was) | \(.now // "missing") | \(.reason) |"' "$REPORT"
+              echo
+            fi
+
+            if [ "$(jq '.errorSamples | length' "$REPORT")" -gt 0 ]; then
+              echo "### Error samples"
+              echo
+              echo '```'
+              jq -r '.errorSamples[] | "line \(.line): \(.reason // .message)"' "$REPORT"
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Open or update the cycle's issue
+        # Drift files an issue as readily as a parse failure: a region that quietly empties produces
+        # no errors at all, so the count diff is the only thing that would ever mention it.
+        if: >-
+          always() && steps.parse.outcome != 'skipped'
+          && (steps.parse.outputs.status != '0' || steps.verdict.outputs.drift != '0'
+              || steps.verdict.outputs.mismatch == 'true')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          STATUS: ${{ steps.parse.outputs.status }}
+          DECLARED: ${{ steps.verdict.outputs.declared }}
+          MISMATCH: ${{ steps.verdict.outputs.mismatch }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          # Everything from the report reaches the body through a file, so nothing the FAA ships is
+          # ever read as shell.
+          {
+            echo "The end-to-end check for cycle **$CYCLE** found problems."
+            echo
+            echo "- Source: \`$URL\`"
+            echo "[View the run]($RUN_URL) — the \`dof-report-$CYCLE\` artifact holds the full"
+            echo "report and the tool's log."
+            echo
+
+            if [ "$MISMATCH" = "true" ]; then
+              echo "### Wrong cycle"
+              echo
+              echo "The file declares currency date \`$DECLARED\`, but this URL should hold"
+              echo "\`$CYCLE_ID\`. Either the FAA published the wrong file or the cycle arithmetic"
+              echo "in \`Cycle\` and in this workflow has drifted apart."
+              echo
+            fi
+
+            if [ -f "$REPORT" ]; then
+              if [ "${STATUS:-1}" != "0" ]; then
+                echo "### Failures"
+                echo
+                jq -r '.failureReasons[]? | "- \(.)"' "$REPORT"
+                echo
+              fi
+
+              if [ "$(jq '.drift | length' "$REPORT")" -gt 0 ]; then
+                echo "### Count drift against $PREVIOUS_CYCLE"
+                echo
+                echo "| Region | $PREVIOUS_CYCLE | $CYCLE | Reason |"
+                echo "|---|---:|---:|---|"
+                jq -r '.drift[] | "| \(.scope) | \(.was) | \(.now // "missing") | \(.reason) |"' "$REPORT"
+                echo
+              fi
+
+              echo "### Counts"
+              echo
+              echo "- Obstacles parsed: $(jq -r '.obstacleCount' "$REPORT")"
+              echo "- Parse errors: $(jq -r '.parseErrorCount' "$REPORT")"
+              echo
+
+              if [ "$(jq '.errorSamples | length' "$REPORT")" -gt 0 ]; then
+                echo "### Error samples"
+                echo
+                echo '```'
+                jq -r '.errorSamples[] | "line \(.line): \(.reason // .message)"' "$REPORT"
+                echo '```'
+              fi
+            else
+              echo "The run produced no report. The tail of its log:"
+              echo
+              echo '```'
+              tail -c 8000 "$PARSE_LOG" 2>/dev/null || echo "No log was produced either."
+              echo '```'
+            fi
+          } > issue-body.md
+
+          # The title is a function of the cycle alone, which is what keeps a re-check idempotent.
+          # The search omits the punctuation so GitHub's query parser cannot read it as a qualifier.
+          title="DOF cycle $CYCLE: end-to-end check failed"
+          number=$(TITLE="$title" gh issue list --state all --search "DOF cycle $CYCLE in:title" \
+            --json number,title --jq 'map(select(.title == env.TITLE)) | .[0].number // empty')
+
+          if [ -n "$number" ]; then
+            gh issue reopen "$number" >/dev/null 2>&1 || true
+            gh issue comment "$number" --body-file issue-body.md
+          else
+            gh issue create --title "$title" --body-file issue-body.md
+          fi
+
+      - name: Annotate the outcome
+        if: always() && steps.parse.outcome != 'skipped'
+        env:
+          STATUS: ${{ steps.parse.outputs.status }}
+          DRIFT: ${{ steps.verdict.outputs.drift }}
+        run: |
+          set -euo pipefail
+
+          drift=${DRIFT:-0}
+
+          if [ "${STATUS:-1}" != "0" ]; then
+            echo "::error::Cycle $CYCLE failed its end-to-end check; an issue has been filed."
+          elif [ "$drift" != "0" ]; then
+            echo "::warning::Cycle $CYCLE parsed cleanly but $drift count(s) drifted."
+          else
+            echo "Cycle $CYCLE parsed cleanly with no count drift."
+          fi
