@@ -4,6 +4,9 @@
 
 ### Changed
 
+- **BREAKING:** The platform floor rises to macOS 26, iOS 26, tvOS 26, watchOS
+  26, and visionOS 26, which is what the byte-parsing work on this release
+  requires.
 - Adopt typed throws across the parsing surface: `DOF.init(data:)`, `DOF.init(url:)`, the `DOF.from(…)` factories, and `DOFByteParser` now declare `throws(DOFError)`, and the DOF file line reader's `AsyncIteratorProtocol.Failure` is `DOFError`. `AsyncBytesLineReader` propagates its source sequence's own `Failure` type.
 - `DOF.from(filePath:)` streams the file in chunks instead of reading it into memory in its entirety. A file that cannot be opened now throws `DOFError.fileNotFound` rather than a Foundation file-read error.
 - Match the header's "CURRENCY DATE = " marker against an `InlineArray<16, UInt8>`, removing a heap allocation from currency date parsing.
@@ -11,6 +14,11 @@
 ### Fixed
 
 - `Cycle.previous`, `Cycle.next`, and the cycle datum date no longer force-unwrap optionals.
+
+### Security
+
+- Strict memory safety (SE-0458) is enabled, and every unsafe construct it
+  surfaces is audited and marked.
 
 ## [2.0.0] - 2026-09-17
 
