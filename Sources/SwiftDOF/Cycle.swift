@@ -1,15 +1,22 @@
 public import Foundation
 
-/// Represents a DOF publication cycle.
-///
-/// The FAA updates the Digital Obstacle File every 56 days, starting from September 1, 2025.
-/// Each cycle represents the effective date of a DOF publication.
+/**
+ Represents a DOF publication cycle.
+
+ The FAA publishes the Digital Obstacle File every 56 days. Each file reflects obstacle changes
+ through its *currency date*, a Sunday that the file's header declares and its filename carries.
+ The FAA releases the file two days later, on the Tuesday, and it stays current until the next
+ cycle's release. A cycle is identified by its currency date.
+ */
 public struct Cycle: Sendable, Codable, Equatable, Hashable {
-  /// The datum date for cycle calculations (September 1, 2025).
-  private static let datum = (year: 2025, month: 9, day: 1)
+  /// The currency date of the datum cycle (August 31, 2025).
+  private static let datum = (year: 2025, month: 8, day: 31)
 
   /// The period between DOF updates in days.
   private static let period = 56
+
+  /// The days between a cycle's currency date and its release.
+  private static let releaseDelay = 2
 
   /// The calendar used for date calculations.
   private static var calendar: Calendar {
@@ -18,7 +25,7 @@ public struct Cycle: Sendable, Codable, Equatable, Hashable {
     return cal
   }
 
-  /// The datum date as a Foundation Date.
+  /// The datum's currency date as a Foundation Date.
   private static var datumDate: Date {
     let components = DateComponents(
       timeZone: .gmt,
@@ -32,16 +39,16 @@ public struct Cycle: Sendable, Codable, Equatable, Hashable {
     return date
   }
 
-  /// The currently effective cycle based on today's date.
+  /// The most recently released cycle as of now.
   public static var effective: Self { Self(covering: .now) }
 
-  /// The year of this cycle.
+  /// The year of this cycle's currency date.
   public let year: UInt
 
-  /// The month of this cycle.
+  /// The month of this cycle's currency date.
   public let month: UInt8
 
-  /// The day of this cycle.
+  /// The day of this cycle's currency date.
   public let day: UInt8
 
   /// The cycle preceding this one (56 days earlier).
@@ -52,90 +59,66 @@ public struct Cycle: Sendable, Codable, Equatable, Hashable {
 
   /// Whether this cycle falls on a valid cycle boundary.
   ///
-  /// A cycle is valid if it falls exactly on a 56-day boundary from the datum date.
+  /// A cycle is valid if its currency date falls exactly on a 56-day boundary from the datum.
   public var isValid: Bool {
-    guard let firstDate else { return false }
-
-    guard
-      let daysFromDatum = Self.calendar.dateComponents(
-        [.day],
-        from: Self.datumDate,
-        to: firstDate
-      ).day
+    guard let currencyDate, let daysFromDatum = Self.days(from: Self.datumDate, to: currencyDate)
     else {
       return false
     }
-
     return daysFromDatum.isMultiple(of: Self.period)
   }
 
-  /// Whether this is the currently effective cycle.
+  /// Whether this is the most recently released cycle.
   public var isEffective: Bool { self == Self.effective }
 
-  /// The start date components for this cycle.
-  public var firstDateComponents: DateComponents {
+  /// The date components of this cycle's currency date.
+  public var currencyDateComponents: DateComponents {
     .init(timeZone: .gmt, year: Int(year), month: Int(month), day: Int(day))
   }
 
-  /// The Foundation Date representation of the start of this cycle.
-  public var firstDate: Date? {
-    Self.calendar.date(from: firstDateComponents)
+  /**
+   The currency date of this cycle (midnight UTC).
+
+   The data reflects obstacle changes through this date. The FAA declares it in the file's
+   `CURRENCY DATE` header and names the distribution file for it (`DOF_YYMMDD.zip`).
+   */
+  public var currencyDate: Date? {
+    Self.calendar.date(from: currencyDateComponents)
   }
 
-  /// The effective date of this cycle (same as ``firstDate``).
-  public var effectiveDate: Date? { firstDate }
-
-  /// The expiration date of this cycle (midnight UTC when cycle expires).
-  ///
-  /// This is the exact moment the cycle expires, which is also the effective date of the next cycle.
-  public var expirationDate: Date? {
-    guard let firstDate else { return nil }
-    return Self.calendar.date(byAdding: .day, value: Self.period, to: firstDate)
+  /// The date the FAA releases this cycle (midnight UTC), two days after its currency date.
+  public var releaseDate: Date? {
+    guard let currencyDate else { return nil }
+    return Self.calendar.date(byAdding: .day, value: Self.releaseDelay, to: currencyDate)
   }
 
-  /// The date range when this cycle is effective.
+  /// The moment this cycle is superseded, which is the next cycle's ``releaseDate``.
+  public var expirationDate: Date? { next?.releaseDate }
+
+  /// The period when this cycle is current.
   ///
-  /// The range starts at `effectiveDate` and ends at `expirationDate` (exclusive).
+  /// The interval runs from ``releaseDate`` to ``expirationDate``. Its end belongs to the next
+  /// cycle; use ``contains(_:)`` to test a date against it.
   public var dateRange: DateInterval? {
-    guard let effectiveDate, let expirationDate else { return nil }
-    return DateInterval(start: effectiveDate, end: expirationDate)
+    guard let releaseDate, let expirationDate else { return nil }
+    return DateInterval(start: releaseDate, end: expirationDate)
   }
 
-  /// The date components for the last day of data coverage (one day before cycle start).
-  ///
-  /// The FAA DOF filename uses this date, not the cycle start date.
-  public var lastDateComponents: DateComponents? {
-    guard let firstDate,
-      let lastDate = Self.calendar.date(byAdding: .day, value: -1, to: firstDate)
-    else {
-      return nil
-    }
-    return Self.calendar.dateComponents([.year, .month, .day], from: lastDate)
-  }
-
-  /// The last day of data coverage (one day before cycle start).
-  ///
-  /// The FAA DOF filename uses this date, not the cycle start date.
-  public var lastDate: Date? {
-    guard let lastDateComponents else { return nil }
-    return Self.calendar.date(from: lastDateComponents)
-  }
-
-  /// Creates a cycle with the specified year, month, and day.
+  /// Creates a cycle with the specified currency date.
   ///
   /// - Parameters:
-  ///   - year: The year of the cycle.
-  ///   - month: The month of the cycle.
-  ///   - day: The day of the cycle.
+  ///   - year: The year of the currency date.
+  ///   - month: The month of the currency date.
+  ///   - day: The day of the currency date.
   init(year: UInt, month: UInt8, day: UInt8) {
     self.year = year
     self.month = month
     self.day = day
   }
 
-  /// Creates a cycle covering the specified date.
+  /// Creates the cycle current on the specified date.
   ///
-  /// The returned cycle is the most recent cycle that started on or before the given date.
+  /// The returned cycle is the most recent cycle released on or before the given date.
   ///
   /// - Parameter date: The date to find a covering cycle for.
   public init(covering date: Date) {
@@ -143,54 +126,37 @@ public struct Cycle: Sendable, Codable, Equatable, Hashable {
     self = Self(covering: Self.calendar.dateComponents([.year, .month, .day], from: date))!
   }
 
-  /// Creates a cycle covering the date represented by the given components.
+  /// Creates the cycle current on the date represented by the given components.
   ///
-  /// The returned cycle is the most recent cycle that started on or before the given date.
+  /// The returned cycle is the most recent cycle released on or before the given date.
   /// Returns nil if the components don't represent a valid date.
   ///
   /// - Parameter components: The date components to find a covering cycle for.
   public init?(covering components: DateComponents) {
-    guard let date = Self.calendar.date(from: components) else {
+    guard let date = Self.calendar.date(from: components),
+      let daysFromDatum = Self.days(from: Self.datumDate, to: date)
+    else {
       return nil
     }
 
-    // Calculate days from datum (can be negative for dates before datum)
+    // Floor division: Swift's / truncates toward zero, not negative infinity
+    let (quotient, remainder) = (daysFromDatum - Self.releaseDelay)
+      .quotientAndRemainder(dividingBy: Self.period)
+    let cycleNumber = remainder < 0 ? quotient - 1 : quotient
+
     guard
-      let daysFromDatum = Self.calendar.dateComponents(
-        [.day],
-        from: Self.datumDate,
-        to: date
-      ).day
+      let currencyDate = Self.calendar.date(
+        byAdding: .day,
+        value: cycleNumber * Self.period,
+        to: Self.datumDate
+      )
     else {
       return nil
     }
 
-    // Floor division to find cycle number (Swift's / truncates toward zero, not negative infinity)
-    let cycleNumber: Int
-    if daysFromDatum >= 0 {
-      cycleNumber = daysFromDatum / Self.period
-    } else {
-      let (q, r) = daysFromDatum.quotientAndRemainder(dividingBy: Self.period)
-      cycleNumber = r == 0 ? q : q - 1
-    }
-
-    let daysToAdd = cycleNumber * Self.period
-
-    guard let cycleDate = Self.calendar.date(byAdding: .day, value: daysToAdd, to: Self.datumDate)
-    else {
-      return nil
-    }
-
-    let resultComponents = Self.calendar.dateComponents([.year, .month, .day], from: cycleDate)
-
-    guard let year = resultComponents.year,
-      let month = resultComponents.month,
-      let day = resultComponents.day
-    else {
-      return nil
-    }
-
-    self.init(year: UInt(year), month: UInt8(month), day: UInt8(day))
+    self.init(
+      dateComponents: Self.calendar.dateComponents([.year, .month, .day], from: currencyDate)
+    )
   }
 
   /// Creates a cycle from date components that already fall on a cycle boundary.
@@ -206,10 +172,15 @@ public struct Cycle: Sendable, Codable, Equatable, Hashable {
     self.init(year: UInt(year), month: UInt8(month), day: UInt8(day))
   }
 
-  /// The cycle whose start date is `days` away from this one's.
+  /// The whole days from one date to another, negative when `end` precedes `start`.
+  private static func days(from start: Date, to end: Date) -> Int? {
+    calendar.dateComponents([.day], from: start, to: end).day
+  }
+
+  /// The cycle whose currency date is `days` away from this one's.
   private func cycle(offsetByDays days: Int) -> Self? {
-    guard let firstDate,
-      let shiftedDate = Self.calendar.date(byAdding: .day, value: days, to: firstDate)
+    guard let currencyDate,
+      let shiftedDate = Self.calendar.date(byAdding: .day, value: days, to: currencyDate)
     else {
       return nil
     }
@@ -239,7 +210,7 @@ extension Cycle: Comparable {
 }
 
 extension Cycle: Identifiable {
-  /// The unique identifier for this cycle in YYYYMMDD format.
+  /// The unique identifier for this cycle: its currency date in YYYYMMDD format.
   public var id: String {
     unsafe String(format: "%04d%02d%02d", year, month, day)
   }
@@ -250,7 +221,7 @@ extension Cycle: RawRepresentable {
 
   public var rawValue: String { id }
 
-  /// Creates a cycle from a YYYYMMDD string.
+  /// Creates a cycle from a YYYYMMDD currency date string.
   ///
   /// - Parameter rawValue: A string in YYYYMMDD format.
   public init?(rawValue: String) {
@@ -276,20 +247,23 @@ extension Cycle: RawRepresentable {
 // MARK: - Factory Methods
 
 extension Cycle {
-  /// Returns the cycle that contains the given date.
+  /// Returns the cycle current on the given date.
   ///
   /// - Parameter date: The date to find the cycle for.
-  /// - Returns: The cycle containing the date.
+  /// - Returns: The most recent cycle released on or before the date.
   public static func cycle(for date: Date) -> Self {
     Self(covering: date)
   }
 
-  /// Returns whether the given date falls within this cycle's effective period.
+  /// Returns whether this cycle is current on the given date.
+  ///
+  /// A cycle is current from its ``releaseDate`` up to, but not including, its
+  /// ``expirationDate``.
   ///
   /// - Parameter date: The date to check.
-  /// - Returns: `true` if the date falls within this cycle's effective period.
+  /// - Returns: `true` if the date falls within this cycle's current period.
   public func contains(_ date: Date) -> Bool {
-    guard let dateRange else { return false }
-    return dateRange.contains(date)
+    guard let releaseDate, let expirationDate else { return false }
+    return (releaseDate..<expirationDate).contains(date)
   }
 }

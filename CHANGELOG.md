@@ -7,6 +7,15 @@
 - **BREAKING:** The platform floor rises to macOS 26, iOS 26, tvOS 26, watchOS
   26, and visionOS 26, which is what the byte-parsing work on this release
   requires.
+- **BREAKING:** A `Cycle` is identified by its currency date, the Sunday that
+  the file's `CURRENCY DATE` header declares and its filename carries, so a
+  parsed cycle and a calculated one now agree. `Cycle(covering:)`,
+  `Cycle.effective`, and `contains(_:)` select the cycle most recently
+  released, two days after its currency date, as the FAA publishes it.
+  `firstDate`, `firstDateComponents`, `effectiveDate`, `lastDate`, and
+  `lastDateComponents` are replaced by `currencyDate`,
+  `currencyDateComponents`, and `releaseDate`; `expirationDate` is the next
+  cycle's release date.
 - Adopt typed throws across the parsing surface: `DOF.init(data:)`, `DOF.init(url:)`, the `DOF.from(…)` factories, and `DOFByteParser` now declare `throws(DOFError)`, and the DOF file line reader's `AsyncIteratorProtocol.Failure` is `DOFError`. `AsyncBytesLineReader` propagates its source sequence's own `Failure` type.
 - `DOF.from(filePath:)` streams the file in chunks instead of reading it into memory in its entirety. A file that cannot be opened now throws `DOFError.fileNotFound` rather than a Foundation file-read error.
 - Match the header's "CURRENCY DATE = " marker against an `InlineArray<16, UInt8>`, removing a heap allocation from currency date parsing.
@@ -14,6 +23,11 @@
 ### Fixed
 
 - `Cycle.previous`, `Cycle.next`, and the cycle datum date no longer force-unwrap optionals.
+- A cycle parsed from a DOF file no longer reports itself invalid, nor takes
+  effect two days before its release and expires two days before its
+  replacement.
+- `Cycle.contains(_:)` excludes the expiration date, which belongs to the next
+  cycle.
 
 ### Security
 

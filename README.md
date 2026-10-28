@@ -205,7 +205,7 @@ The tool exits non-zero when any line fails to parse.
 ### Cycle Watch
 
 The `DOF Cycle Watch` workflow parses each new 56-day cycle as the FAA releases
-it. A daily probe checks whether the cycle in effect is downloadable yet, and
+it. A daily probe checks whether the latest release is downloadable yet, and
 the first time it is, the cycle is parsed end to end and its report kept as an
 artifact — both the record that the cycle was checked and the baseline the next
 cycle's counts are compared against. Parse errors, counts that drift, or a file

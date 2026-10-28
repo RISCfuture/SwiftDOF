@@ -1,10 +1,10 @@
 name: DOF Cycle Watch
 
-# The FAA releases each 56-day DOF the day after it takes effect — the published schedule runs
-# "reflects changes to" August 02, released August 04, for the cycle effective August 03 — so
-# unlike NASR there is no window in which the incoming cycle can be parsed early. The watch
-# therefore tracks the cycle already in effect. A cheap probe gates the expensive parse; the
-# report artifact, named for the cycle, doubles as the record of what has already been checked.
+# The FAA releases each 56-day DOF two days after its currency date — the published schedule runs
+# "reflects changes to" September 27, released September 29 — so unlike NASR there is no window
+# in which the incoming cycle can be parsed early. The watch therefore tracks the cycle most
+# recently released. A cheap probe gates the expensive parse; the report artifact, named for the
+# cycle, doubles as the record of what has already been checked.
 
 on:
   schedule:
@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       cycle:
-        description: "Cycle to check, as the YYYY-MM-DD currency date in its filename. Blank uses the cycle in effect."
+        description: "Cycle to check, as the YYYY-MM-DD currency date in its filename. Blank uses the latest release."
         required: false
         type: string
 
@@ -44,20 +44,22 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Cycles take effect every 56 days from 2025-09-01. The FAA names the file for the last
-          # day of coverage, the day before, which is also the currency date in its header — so
-          # that is the identity used throughout, and it is what the report has to agree with.
+          # Currency dates fall every 56 days from 2025-08-31, and each cycle is released two days
+          # after its currency date. The FAA names the file for the currency date and declares it
+          # in the header — so that is the identity used throughout, and it is what the report has
+          # to agree with.
           period=$(( 56 * 86400 ))
-          datum=$(date -u -d 2025-09-01 +%s)
-          index=$(( ($(date -u +%s) - datum) / period ))
-          currency=$(( datum + index * period - 86400 ))
+          release_delay=$(( 2 * 86400 ))
+          datum=$(date -u -d 2025-08-31 +%s)
+          index=$(( ($(date -u +%s) - datum - release_delay) / period ))
+          currency=$(( datum + index * period ))
 
           if [ -n "$REQUESTED" ]; then
             if ! requested=$(date -u -d "$REQUESTED" +%s 2>/dev/null); then
               echo "::error::'$REQUESTED' is not a date. Use YYYY-MM-DD."
               exit 1
             fi
-            if [ $(( (requested - (datum - 86400)) % period )) -ne 0 ]; then
+            if [ $(( (requested - datum) % period )) -ne 0 ]; then
               echo "::error::$REQUESTED is not a DOF currency date; they fall every 56 days from 2025-08-31."
               exit 1
             fi
@@ -68,14 +70,14 @@ jobs:
             echo "cycle=$(date -u -d "@$currency" +%F)"
             echo "cycle-id=$(date -u -d "@$currency" +%Y%m%d)"
             echo "previous-cycle=$(date -u -d "@$(( currency - period ))" +%F)"
-            echo "effective=$(date -u -d "@$(( currency + 86400 ))" +%F)"
+            echo "released=$(date -u -d "@$(( currency + release_delay ))" +%F)"
           } >> "$GITHUB_OUTPUT"
 
       - name: Check whether the FAA has published it
         id: availability
         env:
           CYCLE: ${{ steps.target.outputs.cycle }}
-          EFFECTIVE: ${{ steps.target.outputs.effective }}
+          RELEASED: ${{ steps.target.outputs.released }}
         run: |
           set -euo pipefail
 
@@ -97,10 +99,10 @@ jobs:
           # 2026-08-04 reported a Last-Modified of 2026-09-14. It is recorded, never relied on.
           modified=$(grep -i '^last-modified:' headers.txt | tail -n 1 | cut -d' ' -f2- | tr -d '\r')
           size=$(grep -i '^content-length:' headers.txt | tail -n 1 | cut -d' ' -f2- | tr -d '\r')
-          days_since=$(( ( $(date -u +%s) - $(date -u -d "$EFFECTIVE" +%s) ) / 86400 ))
+          days_since=$(( ( $(date -u +%s) - $(date -u -d "$RELEASED" +%s) ) / 86400 ))
 
-          # Release lands one day after the cycle takes effect. A week of silence means the FAA
-          # slipped or the URL shape changed, either of which looks like an ordinary quiet day.
+          # A week of silence past the scheduled release means the FAA slipped or the URL shape
+          # changed, either of which looks like an ordinary quiet day.
           if [ "$available" != "true" ] && [ "$days_since" -ge 7 ]; then
             overdue=true
           else
@@ -134,7 +136,7 @@ jobs:
           note() { echo "$1"; echo "$1" >> "$GITHUB_STEP_SUMMARY"; }
 
           if [ "$AVAILABLE" != "true" ]; then
-            note "Cycle $CYCLE is not downloadable yet; it took effect $DAYS_SINCE day(s) ago."
+            note "Cycle $CYCLE is not downloadable yet; it was due $DAYS_SINCE day(s) ago."
             echo "parse=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -153,7 +155,7 @@ jobs:
             note "Cycle $CYCLE has already been checked."
             echo "parse=false" >> "$GITHUB_OUTPUT"
           else
-            note "Cycle $CYCLE is new ($SIZE bytes, in effect $DAYS_SINCE day(s))."
+            note "Cycle $CYCLE is new ($SIZE bytes, released $DAYS_SINCE day(s) ago)."
             echo "parse=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -163,7 +165,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           CYCLE: ${{ steps.target.outputs.cycle }}
-          EFFECTIVE: ${{ steps.target.outputs.effective }}
+          RELEASED: ${{ steps.target.outputs.released }}
           DAYS_SINCE: ${{ steps.availability.outputs.days-since }}
           URL: ${{ steps.availability.outputs.url }}
           CODE: ${{ steps.availability.outputs.code }}
@@ -172,9 +174,9 @@ jobs:
           set -euo pipefail
 
           {
-            echo "Cycle **$CYCLE** took effect on $EFFECTIVE, $DAYS_SINCE day(s) ago, and is still"
-            echo "not downloadable. The FAA normally releases the day after a cycle takes effect,"
-            echo "so either this cycle slipped or the download URL has changed shape."
+            echo "Cycle **$CYCLE** was due for release on $RELEASED, $DAYS_SINCE day(s) ago, and is"
+            echo "still not downloadable. Either this cycle slipped or the download URL has changed"
+            echo "shape."
             echo
             echo "| URL | HEAD |"
             echo "|---|---|"

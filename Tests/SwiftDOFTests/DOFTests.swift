@@ -36,6 +36,7 @@ struct DOFTests {
     #expect(dof.cycle.year == 2025)
     #expect(dof.cycle.month == 12)
     #expect(dof.cycle.day == 21)
+    #expect(dof.cycle.isValid)
   }
 
   @Test

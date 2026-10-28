@@ -48,26 +48,17 @@ struct SwiftDOF_E2E: AsyncParsableCommand {
   )
   var baseline: URL?
 
+  /// The FAA names each file for its cycle's currency date, as YYMMDD.
   private var currentCycleURL: URL {
-    get throws {
-      let cycle = Cycle.effective
-      guard let components = cycle.lastDateComponents else {
-        throw ValidationError("Failed to calculate cycle date")
-      }
-      guard let year = components.year, let month = components.month, let day = components.day
-      else {
-        fatalError("Current cycle could not be determined")
-      }
-      let filename = unsafe String(format: "DOF_%02d%02d%02d.zip", year % 100, month, day)
-      guard let url = URL(string: "https://aeronav.faa.gov/Obst_Data/\(filename)") else {
-        fatalError("Current DOF URL could not be determined")
-      }
-      return url
+    let filename = "DOF_\(Cycle.effective.id.dropFirst(2)).zip"
+    guard let url = URL(string: "https://aeronav.faa.gov/Obst_Data/\(filename)") else {
+      fatalError("Current DOF URL could not be determined")
     }
+    return url
   }
 
   mutating func run() async throws {
-    let inputURL = try input ?? currentCycleURL
+    let inputURL = input ?? currentCycleURL
     let loader = makeLoader(for: inputURL)
     let formatter = makeFormatter(for: format)
 

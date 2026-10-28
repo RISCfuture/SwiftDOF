@@ -12,7 +12,7 @@ public struct DOF: Sendable, Codable {
   /// Obstacles stored by OAS number for O(1) lookup.
   private var obstaclesByID: [String: Obstacle]
 
-  /// The cycle (effective date) of this DOF data.
+  /// The cycle of this DOF data, identified by the currency date in its header.
   public let cycle: Cycle
 
   /// The total number of obstacles.
