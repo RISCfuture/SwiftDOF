@@ -99,7 +99,7 @@ jobs:
 
           # Last-Modified is the mirror's re-sync time, not the release date: the file released on
           # 2026-08-04 reported a Last-Modified of 2026-09-14. It is recorded, never relied on.
-          modified=$(grep -i '^last-modified:' headers.txt | tail -n 1 | cut -d' ' -f2- | tr -d '\r')
+          modified=$({ grep -i '^last-modified:' headers.txt || true; } | tail -n 1 | cut -d' ' -f2- | tr -d '\r')
           size=$(grep -i '^content-length:' headers.txt | tail -n 1 | cut -d' ' -f2- | tr -d '\r')
           days_since=$(( ( $(date -u +%s) - $(date -u -d "$RELEASED" +%s) ) / 86400 ))
 
