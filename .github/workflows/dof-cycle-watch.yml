@@ -8,7 +8,9 @@ name: DOF Cycle Watch
 
 on:
   schedule:
-    - cron: "0 16 * * *"
+    # Sundays. Each 56-day cycle is released two days after its currency date, so a weekly poll finds
+    # it within a week, before the seven-day overdue alert can fire.
+    - cron: "0 16 * * 0"
   workflow_dispatch:
     inputs:
       cycle:
@@ -97,12 +99,12 @@ jobs:
 
           # Last-Modified is the mirror's re-sync time, not the release date: the file released on
           # 2026-08-04 reported a Last-Modified of 2026-09-14. It is recorded, never relied on.
-          modified=$(grep -i '^last-modified:' headers.txt | tail -n 1 | cut -d' ' -f2- | tr -d '\r')
+          modified=$({ grep -i '^last-modified:' headers.txt || true; } | tail -n 1 | cut -d' ' -f2- | tr -d '\r')
           size=$(grep -i '^content-length:' headers.txt | tail -n 1 | cut -d' ' -f2- | tr -d '\r')
           days_since=$(( ( $(date -u +%s) - $(date -u -d "$RELEASED" +%s) ) / 86400 ))
 
           # A week of silence past the scheduled release means the FAA slipped or the URL shape
-          # changed, either of which looks like an ordinary quiet day.
+          # changed, either of which looks like an ordinary quiet poll.
           if [ "$available" != "true" ] && [ "$days_since" -ge 7 ]; then
             overdue=true
           else
@@ -292,7 +294,7 @@ jobs:
 
       - name: Upload the report
         # Uploaded before anything reads it, and on failure too: this artifact is also the record
-        # that the cycle was checked, so a broken cycle is reported once rather than every day.
+        # that the cycle was checked, so a broken cycle is reported once rather than on every poll.
         if: always()
         uses: actions/upload-artifact@v7.0.2
         with:
