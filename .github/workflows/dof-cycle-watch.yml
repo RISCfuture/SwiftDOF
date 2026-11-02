@@ -104,7 +104,7 @@ jobs:
           days_since=$(( ( $(date -u +%s) - $(date -u -d "$RELEASED" +%s) ) / 86400 ))
 
           # A week of silence past the scheduled release means the FAA slipped or the URL shape
-          # changed, either of which looks like an ordinary quiet day.
+          # changed, either of which looks like an ordinary quiet poll.
           if [ "$available" != "true" ] && [ "$days_since" -ge 7 ]; then
             overdue=true
           else
@@ -294,7 +294,7 @@ jobs:
 
       - name: Upload the report
         # Uploaded before anything reads it, and on failure too: this artifact is also the record
-        # that the cycle was checked, so a broken cycle is reported once rather than every day.
+        # that the cycle was checked, so a broken cycle is reported once rather than on every poll.
         if: always()
         uses: actions/upload-artifact@v7.0.2
         with:
